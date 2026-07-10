@@ -25,7 +25,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
     try:
-        reply = await ai_nonymauz_cloud.send_message(chat_id=chat_id, text=message.text)
+        reply = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=message.text)
     except CloudClientError:
         logger.exception("ai-nonymauz-cloud request failed for user %s", user_id)
         reply = "⚠️ Sorry, I couldn't reach the AI service right now. Please try again shortly."

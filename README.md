@@ -10,11 +10,26 @@ Telegram User -> @ai_nonymauz_bots -> Telegram Bot (this repo) -> ai-nonymauz-cl
 
 ## Status
 
-**Phase 1** (current): core bot commands, text message handling, logging, error
+**Phase 1**: core bot commands, text message handling, logging, error
 handling, and a placeholder reply when `AI_NONYMAUZ_CLOUD_URL` is not yet configured.
 
-**Phase 2** (next): wire `services/cloud_client.py` up to a live ai-nonymauz-cloud
-deployment.
+**Phase 2** (current): `services/cloud_client.py` forwards messages to ai-nonymauz-cloud
+once `AI_NONYMAUZ_CLOUD_URL` is set. Assumed API contract (update `cloud_client.py` if
+your real API differs):
+
+```
+POST   {AI_NONYMAUZ_CLOUD_URL}/api/v1/chat
+       body: {"session_id": <telegram_chat_id>, "message": "<text>"}
+       response: {"reply": "<text>"}
+
+DELETE {AI_NONYMAUZ_CLOUD_URL}/api/v1/chat/{session_id}
+       clears server-side conversation history (called by /reset)
+
+Auth:  Authorization: Bearer <AI_NONYMAUZ_CLOUD_API_KEY>   (sent only if configured)
+```
+
+The Telegram chat_id is used as the session_id — ai-nonymauz-cloud is expected to own
+conversation history, so the bot only ever sends the latest message, not a transcript.
 
 ## Requirements
 

@@ -2,7 +2,14 @@
 
 The bot has no AI logic of its own — every user message is forwarded here
 and the response is relayed back to Telegram. Until AI_NONYMAUZ_CLOUD_URL is
-configured (Phase 2), a placeholder reply is returned instead.
+configured, a placeholder reply is returned instead.
+
+Contract (adjust here if the real ai-nonymauz-cloud API differs):
+  POST   {base_url}/api/v1/chat            {"session_id": ..., "message": ...} -> {"reply": ...}
+  DELETE {base_url}/api/v1/chat/{session_id}   clears server-side conversation history
+
+The Telegram chat_id is used as the session_id, so ai-nonymauz-cloud owns
+conversation history and the bot only ever sends the latest message.
 """
 
 from __future__ import annotations
@@ -26,23 +33,25 @@ class CloudClient:
         self._api_key = api_key
         self._timeout = timeout
 
-    async def send_message(self, chat_id: int, text: str) -> str:
+    def _headers(self) -> dict[str, str]:
+        headers = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        return headers
+
+    async def send_message(self, session_id: int, text: str) -> str:
         if not self._base_url:
             logger.warning("AI_NONYMAUZ_CLOUD_URL not configured; returning placeholder reply")
             return f"(Phase 1 placeholder) You said: {text}"
 
-        headers = {}
-        if self._api_key:
-            headers["Authorization"] = f"Bearer {self._api_key}"
-
-        payload = {"chat_id": chat_id, "message": text}
+        payload = {"session_id": session_id, "message": text}
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
-                    f"{self._base_url}/chat",
+                    f"{self._base_url}/api/v1/chat",
                     json=payload,
-                    headers=headers,
+                    headers=self._headers(),
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -53,6 +62,20 @@ class CloudClient:
         if not reply:
             raise CloudClientError("ai-nonymauz-cloud response missing 'reply' field")
         return reply
+
+    async def reset_session(self, session_id: int) -> None:
+        if not self._base_url:
+            return
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.delete(
+                    f"{self._base_url}/api/v1/chat/{session_id}",
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("Failed to reset ai-nonymauz-cloud session %s: %s", session_id, exc)
 
 
 ai_nonymauz_cloud = CloudClient(
