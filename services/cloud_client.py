@@ -6,13 +6,13 @@ configured, a placeholder reply is returned instead.
 
 Confirmed contract (verified live against https://ai-nonymauz-cloud.vercel.app):
   POST {base_url}/chat
-    body: {"messages": [{"role": "user", "content": "..."}], "stream": false}
+    body: {"messages": [{"role": "user"|"assistant", "content": "..."}], "stream": false}
     response: OpenAI-style chat completion, e.g.
       {"choices": [{"message": {"content": "...", "reasoning": "..."}}], ...}
 
-The API is stateless per request — it has no session/reset endpoint, so the
-bot only sends the latest message. Conversation history/memory is a Phase 3
-feature to be added on the bot side (or once ai-nonymauz-cloud exposes one).
+The API itself is stateless per request — it has no session/reset endpoint,
+so multi-turn memory is the bot's job: the caller passes the full message
+history (see services/storage.py) instead of just the latest turn.
 """
 
 from __future__ import annotations
@@ -45,13 +45,14 @@ class CloudClient:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
 
-    async def send_message(self, session_id: int, text: str) -> str:
+    async def send_conversation(self, session_id: int, messages: list[dict[str, str]]) -> str:
         if not self._base_url:
+            last_text = messages[-1]["content"] if messages else ""
             logger.warning("AI_NONYMAUZ_CLOUD_URL not configured; returning placeholder reply")
-            return f"(Phase 1 placeholder) You said: {text}"
+            return f"(Phase 1 placeholder) You said: {last_text}"
 
         payload = {
-            "messages": [{"role": "user", "content": text}],
+            "messages": messages,
             "stream": False,
             # "auto" mode routes unpredictably and often truncates
             # (finish_reason: length) before finishing tool/search-based
@@ -84,6 +85,10 @@ class CloudClient:
         # of the separate 'reasoning' field — strip it before showing the user.
         content = _THINK_TAG_RE.sub("", content).strip()
         return content or "(empty response from AI Nonymauz)"
+
+    async def send_message(self, session_id: int, text: str) -> str:
+        """Single-turn convenience wrapper (no history) for one-off queries."""
+        return await self.send_conversation(session_id, [{"role": "user", "content": text}])
 
 
 ai_nonymauz_cloud = CloudClient(

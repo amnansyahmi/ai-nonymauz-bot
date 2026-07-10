@@ -9,6 +9,7 @@ from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
+from services.storage import add_message, get_recent_messages
 from utils.formatting import markdown_to_telegram_html
 
 logger = logging.getLogger(__name__)
@@ -25,10 +26,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
+    history = await get_recent_messages(chat_id)
+    conversation = history + [{"role": "user", "content": message.text}]
+
     try:
-        reply = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=message.text)
+        reply = await ai_nonymauz_cloud.send_conversation(session_id=chat_id, messages=conversation)
     except CloudClientError:
         logger.exception("ai-nonymauz-cloud request failed for user %s", user_id)
-        reply = "⚠️ Sorry, I couldn't reach the AI service right now. Please try again shortly."
+        await add_message(chat_id, "user", message.text)
+        await message.reply_text("⚠️ Sorry, I couldn't reach the AI service right now. Please try again shortly.")
+        return
+
+    await add_message(chat_id, "user", message.text)
+    await add_message(chat_id, "assistant", reply)
 
     await message.reply_text(markdown_to_telegram_html(reply), parse_mode="HTML")

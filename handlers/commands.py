@@ -7,6 +7,8 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from services.storage import clear_history
+
 logger = logging.getLogger(__name__)
 
 START_MESSAGE = (
@@ -55,4 +57,5 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /reset", update.effective_user.id if update.effective_user else "unknown")
     context.user_data.clear()
+    await clear_history(update.effective_chat.id)
     await update.message.reply_text(RESET_MESSAGE)
