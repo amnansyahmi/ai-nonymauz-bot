@@ -22,7 +22,8 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 _HOST = "jsearch.p.rapidapi.com"
-_URL = f"https://{_HOST}/search"
+# JSearch retired the old /search endpoint (returns 404); /search-v2 is current.
+_URL = f"https://{_HOST}/search-v2"
 
 
 class JobsApiError(Exception):
@@ -56,8 +57,14 @@ class JSearchClient:
             "X-RapidAPI-Host": _HOST,
         }
         # country defaults the search region — without it JSearch assumes "us",
-        # so Malaysian-location queries return nothing.
-        params = {"query": query, "page": "1", "num_pages": "1", "country": self._country}
+        # so Malaysian-location queries return nothing. Params match the
+        # /search-v2 contract (query, num_pages, country, date_posted).
+        params = {
+            "query": query,
+            "num_pages": "1",
+            "country": self._country,
+            "date_posted": "all",
+        }
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:

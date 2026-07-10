@@ -63,6 +63,21 @@ async def test_search_parses_and_limits(monkeypatch):
     assert postings[1].location == "Location not specified"
 
 
+async def test_search_uses_v2_endpoint_with_country(monkeypatch):
+    captured = {}
+
+    class _CapturingClient(_FakeClient):
+        async def get(self, url, headers=None, params=None):
+            captured["url"] = url
+            captured["params"] = params
+            return _FakeResponse({"status": "OK", "data": []})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _CapturingClient({}))
+    await JSearchClient(api_key="k", country="my").search("dev")
+    assert captured["url"].endswith("/search-v2")
+    assert captured["params"]["country"] == "my"
+
+
 async def test_search_http_error_wrapped(monkeypatch):
     class _BoomClient(_FakeClient):
         async def get(self, *a, **k):
