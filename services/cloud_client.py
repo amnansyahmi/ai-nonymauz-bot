@@ -26,7 +26,31 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Closed reasoning blocks. Some models inline their <think> trace into the
+# reply content instead of the separate 'reasoning' field.
 _THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+# An *unclosed* trailing <think> — happens when the reply is truncated mid
+# reasoning (finish_reason: length). Drop it so raw reasoning never reaches
+# the user, even though it means we lost the real answer for that turn.
+_OPEN_THINK_RE = re.compile(r"<think>.*$", re.DOTALL | re.IGNORECASE)
+
+# Sent as the system prompt on every conversational turn. Keeps replies in the
+# user's language, concise, non-repetitive on follow-ups, and free of raw
+# reasoning — without this the model re-dumps the whole previous answer and
+# sometimes leaks <think> traces.
+SYSTEM_PROMPT = (
+    "You are AI Nonymauz, a helpful assistant chatting on Telegram. "
+    "Always reply in the same language the user wrote in. "
+    "Be concise and conversational. When answering a follow-up question, do "
+    "not repeat information you have already given — only add what is new or "
+    "directly asked. Never output your internal reasoning or <think> tags."
+)
+
+
+def _strip_reasoning(text: str) -> str:
+    text = _THINK_TAG_RE.sub("", text)
+    text = _OPEN_THINK_RE.sub("", text)
+    return text.strip()
 
 
 class CloudClientError(Exception):
@@ -59,6 +83,7 @@ class CloudClient:
             # answers. "deep" mode + a higher token budget avoids that.
             "mode": "deep",
             "max_tokens": 2048,
+            "system_prompt": SYSTEM_PROMPT,
         }
 
         try:
@@ -81,10 +106,11 @@ class CloudClient:
         if not content:
             raise CloudClientError("ai-nonymauz-cloud response missing message content")
 
-        # Some reasoning models inline their <think> trace into content instead
-        # of the separate 'reasoning' field — strip it before showing the user.
-        content = _THINK_TAG_RE.sub("", content).strip()
-        return content or "(empty response from AI Nonymauz)"
+        content = _strip_reasoning(content)
+        if not content:
+            # The whole reply was (truncated) reasoning with no actual answer.
+            return "🤔 I got a bit tangled up thinking about that. Could you rephrase or ask again?"
+        return content
 
     async def send_message(self, session_id: int, text: str) -> str:
         """Single-turn convenience wrapper (no history) for one-off queries."""
