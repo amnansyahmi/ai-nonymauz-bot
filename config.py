@@ -16,6 +16,9 @@ class Settings:
     ai_nonymauz_cloud_url: str | None
     ai_nonymauz_cloud_api_key: str | None
     log_level: str
+    port: int
+    webhook_url: str | None
+    webhook_secret_token: str | None
 
 
 def _require(name: str) -> str:
@@ -26,11 +29,19 @@ def _require(name: str) -> str:
 
 
 def load_settings() -> Settings:
+    # WEBHOOK_URL can be set explicitly, or picked up automatically from
+    # RENDER_EXTERNAL_URL, which Render injects for every web service.
+    # Leaving both unset (e.g. local development) falls back to long polling.
+    webhook_url = os.getenv("WEBHOOK_URL") or os.getenv("RENDER_EXTERNAL_URL")
+
     return Settings(
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         ai_nonymauz_cloud_url=os.getenv("AI_NONYMAUZ_CLOUD_URL"),
         ai_nonymauz_cloud_api_key=os.getenv("AI_NONYMAUZ_CLOUD_API_KEY"),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        port=int(os.getenv("PORT", "8080")),
+        webhook_url=webhook_url,
+        webhook_secret_token=os.getenv("WEBHOOK_SECRET_TOKEN"),
     )
 
 

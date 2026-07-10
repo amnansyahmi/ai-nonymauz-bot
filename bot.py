@@ -40,9 +40,25 @@ def build_application() -> Application:
 
 
 def main() -> None:
-    logger.info("Starting AI Nonymauz bot (long polling)")
     application = build_application()
-    application.run_polling(allowed_updates=["message"])
+
+    if settings.webhook_url:
+        # The bot token doubles as a secret URL path so the webhook endpoint
+        # isn't guessable without it.
+        url_path = settings.telegram_bot_token
+        webhook_url = f"{settings.webhook_url.rstrip('/')}/{url_path}"
+        logger.info("Starting AI Nonymauz bot (webhook mode) on port %s", settings.port)
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=settings.port,
+            url_path=url_path,
+            webhook_url=webhook_url,
+            secret_token=settings.webhook_secret_token,
+            allowed_updates=["message"],
+        )
+    else:
+        logger.info("Starting AI Nonymauz bot (long polling)")
+        application.run_polling(allowed_updates=["message"])
 
 
 if __name__ == "__main__":

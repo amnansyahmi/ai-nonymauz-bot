@@ -46,11 +46,24 @@ cp .env.example .env
 # edit .env and set TELEGRAM_BOT_TOKEN
 ```
 
-## Running (development, long polling)
+## Running
+
+The bot automatically chooses its update mode based on environment variables — no
+code changes needed to switch between them.
+
+**Long polling (local development)** — leave `WEBHOOK_URL` unset:
 
 ```bash
 python bot.py
 ```
+
+**Webhook mode (deployed, e.g. Render free Web Service)** — set `WEBHOOK_URL` to your
+service's public HTTPS URL (Render sets this automatically via `RENDER_EXTERNAL_URL`,
+so no manual step is needed there). The bot binds an HTTP server on `$PORT` and
+registers the webhook with Telegram on startup, listening at
+`{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}`. Optionally set `WEBHOOK_SECRET_TOKEN` to a random
+string — Telegram echoes it back on every request so you can verify requests aren't
+spoofed.
 
 ## Commands
 
@@ -67,7 +80,7 @@ reset - Reset the conversation
 
 ```
 ai-nonymauz-bot/
-├── bot.py              # Entry point, builds the Application and runs polling
+├── bot.py              # Entry point; runs polling locally, webhook when deployed
 ├── config.py            # Environment variable loading
 ├── handlers/
 │   ├── commands.py      # /start /help /about /reset
@@ -89,6 +102,12 @@ docker run --env-file .env ai-nonymauz-bot
 
 ## Deploying to Render
 
-This repo includes a `render.yaml` for a background worker service. Push to GitHub,
-connect the repo in Render, and set the `TELEGRAM_BOT_TOKEN` and `AI_NONYMAUZ_CLOUD_URL`
-environment variables in the Render dashboard.
+This repo includes a `render.yaml` for a **free Web Service** running in webhook mode
+(no long-running worker plan required). In the Render dashboard: New → Blueprint →
+select this repo → it detects `render.yaml` → set `TELEGRAM_BOT_TOKEN` (and
+`AI_NONYMAUZ_CLOUD_URL` / `AI_NONYMAUZ_CLOUD_API_KEY` once ready) → Apply.
+
+Render injects `PORT` and `RENDER_EXTERNAL_URL` automatically, which `config.py` picks
+up, so no extra webhook configuration is needed. Note that free Web Services spin down
+after periods of inactivity — the first message after idle time will have a cold-start
+delay of a few seconds before the bot replies.
