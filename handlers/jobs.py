@@ -221,10 +221,9 @@ async def watchjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     watch = await add_job_watch(chat_id=chat_id, query=query)
     await update.message.reply_text(
-        f"✅ Saved watch #{watch.id} for \"{query}\".\n\n"
+        f"✅ Saved watch for \"{query}\".\n\n"
         "I'll check periodically and message you when the results change. "
-        "Use /myjobs to see your watches, /unwatchjob <id> to stop one, or "
-        "/jobs to search right now.\n\n"
+        "Tap /myjobs to run or remove your watches.\n\n"
         "(Automatic checks run only when the deployment's scheduler is "
         "configured — see the README.)"
     )
@@ -244,12 +243,47 @@ async def unwatchjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(f"No watch #{watch_id} found for you.")
 
 
-async def myjobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    watches = await list_job_watches(chat_id)
-    if not watches:
-        await update.message.reply_text("You have no saved job watches. Add one with /watchjob <role or keyword>.")
-        return
+_MYJOBS_HEADER = "📌 Your saved job watches — tap 🔁 to run one now or 🗑 to remove it:"
+_MYJOBS_EMPTY = "You have no saved job watches yet. Save one with ⭐ on a search result, or /watchjob <role>."
 
-    lines = [f"#{w.id} — {w.query}" for w in watches]
-    await update.message.reply_text("Your saved job watches:\n" + "\n".join(lines))
+
+def _watches_keyboard(watches) -> InlineKeyboardMarkup:
+    rows = []
+    for w in watches:
+        label = w.query if len(w.query) <= 30 else w.query[:29] + "…"
+        rows.append([
+            InlineKeyboardButton(f"🔁 {label}", callback_data=f"watch:run:{w.id}"),
+            InlineKeyboardButton("🗑", callback_data=f"watch:del:{w.id}"),
+        ])
+    return InlineKeyboardMarkup(rows)
+
+
+async def myjobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    watches = await list_job_watches(update.effective_chat.id)
+    if not watches:
+        await update.message.reply_text(_MYJOBS_EMPTY)
+        return
+    await update.message.reply_text(_MYJOBS_HEADER, reply_markup=_watches_keyboard(watches))
+
+
+async def watch_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the 🔁 run / 🗑 delete buttons in /myjobs."""
+    query = update.callback_query
+    await query.answer()
+    _, action, raw_id = query.data.split(":")
+    watch_id = int(raw_id)
+    chat_id = query.message.chat_id
+
+    if action == "run":
+        watch = next((w for w in await list_job_watches(chat_id) if w.id == watch_id), None)
+        if watch is None:
+            await query.message.reply_text("That watch no longer exists.")
+            return
+        await _run_and_reply(query.message, context, watch.query)
+    elif action == "del":
+        await remove_job_watch(chat_id=chat_id, watch_id=watch_id)
+        watches = await list_job_watches(chat_id)
+        if watches:
+            await query.edit_message_text(_MYJOBS_HEADER, reply_markup=_watches_keyboard(watches))
+        else:
+            await query.edit_message_text("🗑 Removed. " + _MYJOBS_EMPTY)

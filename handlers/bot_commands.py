@@ -16,10 +16,11 @@ BOT_COMMANDS = [
     BotCommand("reset", "Reset the conversation"),
     BotCommand("jobs", "Guided job search (title, location, salary)"),
     BotCommand("watchjob", "Save a job search to check later"),
-    BotCommand("myjobs", "List your saved job watches"),
-    BotCommand("unwatchjob", "Remove a saved job watch"),
+    BotCommand("myjobs", "Run or remove your saved job watches"),
     BotCommand("image", "Generate an image from a description"),
     BotCommand("weather", "Get the current weather"),
-    BotCommand("history", "Show recent conversation history"),
     BotCommand("summarize", "Summarize the conversation"),
 ]
+# Note: /history and /unwatchjob still work if typed, but are intentionally
+# kept out of the menu — /summarize covers recall, and /myjobs has a delete
+# button that replaces /unwatchjob.
