@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 
 from telegram import Update
-from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
 from services.storage import add_job_watch, list_job_watches, remove_job_watch
-from utils.formatting import markdown_to_telegram_html
+from utils.telegram_send import send_formatted_reply, typing_action
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +29,16 @@ async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     chat_id = update.effective_chat.id
-    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
     try:
-        reply = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
+        async with typing_action(context, chat_id):
+            reply = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
     except CloudClientError:
         logger.exception("Job search failed for chat %s", chat_id)
         await update.message.reply_text("⚠️ Sorry, job search isn't available right now. Please try again shortly.")
         return
 
-    await update.message.reply_text(markdown_to_telegram_html(reply), parse_mode="HTML")
+    await send_formatted_reply(update.message, reply)
 
 
 async def watchjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
