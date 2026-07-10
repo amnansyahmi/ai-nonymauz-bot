@@ -1,0 +1,15 @@
+services:
+  - type: worker
+    name: ai-nonymauz-bot
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: AI_NONYMAUZ_CLOUD_URL
+        sync: false
+      - key: AI_NONYMAUZ_CLOUD_API_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO
