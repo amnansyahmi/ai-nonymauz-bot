@@ -80,9 +80,18 @@ class JSearchClient:
             raise JobsApiError(f"Failed to reach jobs API: {exc}") from exc
 
         results = data.get("data")
+        # /search-v2 may nest the job list under data instead of making data
+        # the list directly — handle the common variants.
+        if isinstance(results, dict):
+            for key in ("jobs", "results", "items", "data"):
+                if isinstance(results.get(key), list):
+                    results = results[key]
+                    break
         if not isinstance(results, list):
-            # Unexpected shape — surface the top-level keys so we can adapt.
-            raise JobsApiError(f"Unexpected jobs API response (keys: {sorted(data.keys())})")
+            raw = data.get("data")
+            raise JobsApiError(
+                f"Unexpected 'data' shape: {type(raw).__name__} -> {repr(raw)[:300]}"
+            )
 
         postings = []
         for item in results[:limit]:
