@@ -79,9 +79,15 @@ class JSearchClient:
         except httpx.HTTPError as exc:
             raise JobsApiError(f"Failed to reach jobs API: {exc}") from exc
 
-        results = data.get("data") or []
+        results = data.get("data")
+        if not isinstance(results, list):
+            # Unexpected shape — surface the top-level keys so we can adapt.
+            raise JobsApiError(f"Unexpected jobs API response (keys: {sorted(data.keys())})")
+
         postings = []
         for item in results[:limit]:
+            if not isinstance(item, dict):
+                continue
             city = item.get("job_city") or ""
             country = item.get("job_country") or ""
             location = ", ".join(p for p in (city, country) if p) or "Location not specified"

@@ -12,7 +12,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import settings
-from services.jobs_api import JobsApiError, jsearch
+from services.jobs_api import jsearch
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,8 @@ async def diag(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             lines.append(f"• JSearch live test: OK — {len(postings)} result(s)")
             if postings:
                 lines.append(f"   e.g. {postings[0].title} @ {postings[0].company}")
-        except JobsApiError as exc:
-            lines.append(f"• JSearch live test: FAILED — {exc}")
+        except Exception as exc:  # noqa: BLE001 - report whatever happened
+            lines.append(f"• JSearch live test: FAILED — {type(exc).__name__}: {exc}")
     else:
         lines.append("• JSearch live test: skipped (no key)")
 

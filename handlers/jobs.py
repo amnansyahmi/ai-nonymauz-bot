@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
-from services.jobs_api import JobsApiError, format_postings, jsearch
+from services.jobs_api import format_postings, jsearch
 from services.storage import add_job_watch, list_job_watches, remove_job_watch
 from utils.rate_limit import message_limiter
 from utils.telegram_send import send_formatted_reply, typing_action
@@ -35,7 +35,7 @@ async def job_results_text(chat_id: int, query: str) -> str:
         try:
             postings = await jsearch.search(query)
             return format_postings(query, postings)
-        except JobsApiError:
+        except Exception:  # noqa: BLE001 - never let a jobs-API issue break the reply
             logger.warning("JSearch failed for %r; falling back to cloud search", query, exc_info=True)
 
     return await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
