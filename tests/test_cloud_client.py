@@ -72,3 +72,22 @@ async def test_missing_choices_raises(monkeypatch):
     client = CloudClient(base_url="https://cloud.example", api_key=None)
     with pytest.raises(CloudClientError):
         await client.send_message(session_id=1, text="hi")
+
+
+async def test_describe_image_parses_content(monkeypatch):
+    payload = {"choices": [{"message": {"content": "A red square"}}]}
+    captured = {}
+
+    class _CapturingClient(_FakeClient):
+        async def post(self, url, json=None, headers=None):
+            captured["json"] = json
+            return _FakeResponse(payload)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _CapturingClient(payload))
+    client = CloudClient(base_url="https://cloud.example", api_key=None)
+    reply = await client.describe_image(b"\x89PNG...", "image/png", "what is this?")
+    assert reply == "A red square"
+    # Sent as a vision request with an image_url content part.
+    assert captured["json"]["mode"] == "vision"
+    parts = captured["json"]["messages"][0]["content"]
+    assert any(p["type"] == "image_url" and p["image_url"]["url"].startswith("data:image/png;base64,") for p in parts)

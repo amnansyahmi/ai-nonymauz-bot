@@ -7,7 +7,10 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from services.storage import clear_history
+from services.cloud_client import CloudClientError, ai_nonymauz_cloud
+from services.storage import clear_history, get_recent_messages
+from utils.rate_limit import message_limiter
+from utils.telegram_send import send_formatted_reply, typing_action
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +31,10 @@ HELP_MESSAGE = (
     "/myjobs - List your saved job watches\n"
     "/unwatchjob <id> - Remove a saved job watch\n"
     "/image <description> - Generate an image\n"
-    "/weather <city> - Get the current weather\n\n"
-    "You can also just send me a normal text message."
+    "/weather <city> - Get the current weather\n"
+    "/history - Show recent conversation history\n"
+    "/summarize - Summarize the conversation\n\n"
+    "You can also send me a normal text message, or a photo to describe."
 )
 
 ABOUT_MESSAGE = (
@@ -61,3 +66,49 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.clear()
     await clear_history(update.effective_chat.id)
     await update.message.reply_text(RESET_MESSAGE)
+
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    messages = await get_recent_messages(chat_id)
+    if not messages:
+        await update.message.reply_text("No conversation history yet. Send me a message to get started!")
+        return
+
+    lines = []
+    for m in messages:
+        who = "🧑 You" if m["role"] == "user" else "🤖 AI Nonymauz"
+        text = m["content"]
+        if len(text) > 200:
+            text = text[:200] + "…"
+        lines.append(f"{who}: {text}")
+
+    await send_formatted_reply(update.message, "\n\n".join(lines))
+
+
+async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    messages = await get_recent_messages(chat_id)
+    if not messages:
+        await update.message.reply_text("Nothing to summarize yet — we haven't talked about anything.")
+        return
+
+    if not message_limiter.allow(chat_id):
+        await update.message.reply_text("⏳ Please wait a few seconds and try again.")
+        return
+
+    transcript = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+    prompt = (
+        "Summarize the following conversation concisely in a few bullet points, "
+        "in the same language it's mostly written in:\n\n" + transcript
+    )
+
+    try:
+        async with typing_action(context, chat_id):
+            reply = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=prompt)
+    except CloudClientError:
+        logger.exception("Summarize failed for chat %s", chat_id)
+        await update.message.reply_text("⚠️ Sorry, I couldn't summarize right now. Please try again shortly.")
+        return
+
+    await send_formatted_reply(update.message, reply)

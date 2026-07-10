@@ -19,4 +19,6 @@ BOT_COMMANDS = [
     BotCommand("unwatchjob", "Remove a saved job watch"),
     BotCommand("image", "Generate an image from a description"),
     BotCommand("weather", "Get the current weather"),
+    BotCommand("history", "Show recent conversation history"),
+    BotCommand("summarize", "Summarize the conversation"),
 ]

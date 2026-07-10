@@ -13,10 +13,10 @@ from telegram.ext import (
 
 from config import settings
 from handlers.bot_commands import BOT_COMMANDS
-from handlers.commands import about, help_command, reset, start
+from handlers.commands import about, help_command, history, reset, start, summarize
 from handlers.errors import handle_error
 from handlers.jobs import jobs, myjobs, unwatchjob, watchjob
-from handlers.media import image, weather
+from handlers.media import handle_photo, handle_voice, image, weather
 from handlers.messages import handle_text
 from services.storage import init_db
 
@@ -49,6 +49,10 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("myjobs", myjobs))
     application.add_handler(CommandHandler("image", image))
     application.add_handler(CommandHandler("weather", weather))
+    application.add_handler(CommandHandler("history", history))
+    application.add_handler(CommandHandler("summarize", summarize))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     application.add_error_handler(handle_error)

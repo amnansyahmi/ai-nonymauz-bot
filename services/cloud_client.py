@@ -70,23 +70,7 @@ class CloudClient:
             headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
 
-    async def send_conversation(self, session_id: int, messages: list[dict[str, str]]) -> str:
-        if not self._base_url:
-            last_text = messages[-1]["content"] if messages else ""
-            logger.warning("AI_NONYMAUZ_CLOUD_URL not configured; returning placeholder reply")
-            return f"(Phase 1 placeholder) You said: {last_text}"
-
-        payload = {
-            "messages": messages,
-            "stream": False,
-            # "auto" mode routes unpredictably and often truncates
-            # (finish_reason: length) before finishing tool/search-based
-            # answers. "deep" mode + a higher token budget avoids that.
-            "mode": "deep",
-            "max_tokens": 2048,
-            "system_prompt": SYSTEM_PROMPT,
-        }
-
+    async def _post_chat(self, payload: dict) -> str:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
@@ -113,9 +97,45 @@ class CloudClient:
             return "🤔 I got a bit tangled up thinking about that. Could you rephrase or ask again?"
         return content
 
+    async def send_conversation(self, session_id: int, messages: list[dict]) -> str:
+        if not self._base_url:
+            last = messages[-1]["content"] if messages else ""
+            last_text = last if isinstance(last, str) else "(non-text message)"
+            logger.warning("AI_NONYMAUZ_CLOUD_URL not configured; returning placeholder reply")
+            return f"(Phase 1 placeholder) You said: {last_text}"
+
+        return await self._post_chat({
+            "messages": messages,
+            "stream": False,
+            # "auto" mode routes unpredictably and often truncates
+            # (finish_reason: length) before finishing tool/search-based
+            # answers. "deep" mode + a higher token budget avoids that.
+            "mode": "deep",
+            "max_tokens": 2048,
+            "system_prompt": SYSTEM_PROMPT,
+        })
+
     async def send_message(self, session_id: int, text: str) -> str:
         """Single-turn convenience wrapper (no history) for one-off queries."""
         return await self.send_conversation(session_id, [{"role": "user", "content": text}])
+
+    async def describe_image(self, image_bytes: bytes, mime_type: str, prompt: str) -> str:
+        """Ask a vision model about an image the user sent."""
+        if not self._base_url:
+            return "(image received, but AI_NONYMAUZ_CLOUD_URL is not configured)"
+
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}},
+        ]
+        return await self._post_chat({
+            "messages": [{"role": "user", "content": content}],
+            "stream": False,
+            "mode": "vision",
+            "max_tokens": 1024,
+            "system_prompt": SYSTEM_PROMPT,
+        })
 
     async def generate_image(self, prompt: str) -> tuple[bytes, str]:
         """Generate an image via ai-nonymauz-cloud. Returns (image_bytes, mime_type)."""

@@ -79,7 +79,13 @@ myjobs - List your saved job watches
 unwatchjob - Remove a saved job watch
 image - Generate an image from a description
 weather - Get the current weather
+history - Show recent conversation history
+summarize - Summarize the conversation
 ```
+
+You can also send a **photo** (with an optional caption/question) and the bot
+describes it using ai-nonymauz-cloud's vision mode. Voice messages are not
+supported — the backend has no speech-to-text.
 
 The bot registers this menu automatically on startup via `set_my_commands`
 (see `handlers/bot_commands.py`), so the manual BotFather `/setcommands` step
@@ -122,10 +128,10 @@ ai-nonymauz-bot/
 ├── server.py            # FastAPI app: Telegram + /tasks/run-job-watches + /health
 ├── config.py            # Environment variable loading
 ├── handlers/
-│   ├── commands.py      # /start /help /about /reset
+│   ├── commands.py      # /start /help /about /reset /history /summarize
 │   ├── bot_commands.py  # The command menu registered on startup
 │   ├── jobs.py          # /jobs /watchjob /unwatchjob /myjobs
-│   ├── media.py         # /image /weather
+│   ├── media.py         # /image /weather + photo & voice message handlers
 │   ├── messages.py      # Plain text message handler (with conversation memory)
 │   └── errors.py        # Global error handler
 ├── services/
