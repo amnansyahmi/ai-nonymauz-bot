@@ -56,33 +56,38 @@ def chunk_text(text: str, limit: int = MAX_MESSAGE_LEN) -> list[str]:
     return chunks
 
 
-async def _send_chunks(send_html, send_plain, raw_text: str) -> None:
+async def _send_chunks(send_html, send_plain, raw_text: str, reply_markup=None) -> None:
     html = markdown_to_telegram_html(raw_text)
-    for chunk in chunk_text(html):
+    chunks = chunk_text(html)
+    for i, chunk in enumerate(chunks):
+        # Attach any buttons only to the final chunk.
+        markup = reply_markup if i == len(chunks) - 1 else None
         try:
-            await send_html(chunk)
+            await send_html(chunk, markup)
         except BadRequest:
             # Malformed HTML for this chunk — strip tags and send as plain text
             # so the user still gets the content.
             logger.warning("HTML send rejected; falling back to plain text")
-            await send_plain(_TAG_RE.sub("", chunk))
+            await send_plain(_TAG_RE.sub("", chunk), markup)
 
 
-async def send_formatted_reply(message: Message, raw_text: str) -> None:
+async def send_formatted_reply(message: Message, raw_text: str, reply_markup=None) -> None:
     """Reply to a message, splitting and degrading to plain text on HTML errors."""
     await _send_chunks(
-        lambda c: message.reply_text(c, parse_mode="HTML"),
-        lambda c: message.reply_text(c),
+        lambda c, m: message.reply_text(c, parse_mode="HTML", reply_markup=m),
+        lambda c, m: message.reply_text(c, reply_markup=m),
         raw_text,
+        reply_markup,
     )
 
 
-async def send_formatted_message(bot: Bot, chat_id: int, raw_text: str) -> None:
+async def send_formatted_message(bot: Bot, chat_id: int, raw_text: str, reply_markup=None) -> None:
     """Send to a chat by id (for out-of-band pushes), same splitting/fallback."""
     await _send_chunks(
-        lambda c: bot.send_message(chat_id=chat_id, text=c, parse_mode="HTML"),
-        lambda c: bot.send_message(chat_id=chat_id, text=c),
+        lambda c, m: bot.send_message(chat_id=chat_id, text=c, parse_mode="HTML", reply_markup=m),
+        lambda c, m: bot.send_message(chat_id=chat_id, text=c, reply_markup=m),
         raw_text,
+        reply_markup,
     )
 
 

@@ -58,9 +58,9 @@ ABOUT_MESSAGE = (
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /start", update.effective_user.id if update.effective_user else "unknown")
-    from handlers.menu import main_menu_keyboard  # lazy import avoids a cycle
+    from handlers.menu import persistent_keyboard  # lazy import avoids a cycle
 
-    await update.message.reply_text(START_MESSAGE, parse_mode="Markdown", reply_markup=main_menu_keyboard())
+    await update.message.reply_text(START_MESSAGE, parse_mode="Markdown", reply_markup=persistent_keyboard())
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

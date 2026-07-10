@@ -17,9 +17,16 @@ from handlers.bot_commands import BOT_COMMANDS
 from handlers.commands import about, help_command, history, reset, start, summarize
 from handlers.diag import diag
 from handlers.errors import handle_error
-from handlers.jobs import build_jobs_conversation, myjobs, unwatchjob, watchjob
-from handlers.media import handle_photo, handle_voice, image, weather
-from handlers.menu import menu_callback, menu_command
+from handlers.jobs import build_jobs_conversation, jobs_action_callback, myjobs, unwatchjob, watchjob
+from handlers.media import handle_photo, handle_voice, image, media_action_callback, weather
+from handlers.menu import (
+    BTN_IMAGE,
+    BTN_MENU,
+    BTN_WEATHER,
+    button_bar_router,
+    menu_callback,
+    menu_command,
+)
 from handlers.messages import handle_text
 from services.storage import init_db
 
@@ -64,8 +71,12 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("diag", diag))  # not in the public menu
     application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu:"))
+    application.add_handler(CallbackQueryHandler(jobs_action_callback, pattern=r"^act:jobs_"))
+    application.add_handler(CallbackQueryHandler(media_action_callback, pattern=r"^act:(image|weather)_"))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
+    # Persistent button-bar taps (Jobs is routed by the jobs conversation entry).
+    application.add_handler(MessageHandler(filters.Text([BTN_IMAGE, BTN_WEATHER, BTN_MENU]), button_bar_router))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     application.add_error_handler(handle_error)

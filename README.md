@@ -87,6 +87,16 @@ You can also send a **photo** (with an optional caption/question) and the bot
 describes it using ai-nonymauz-cloud's vision mode. Voice messages are not
 supported — the backend has no speech-to-text.
 
+### Interactive UI
+
+- **Persistent button bar** — `/start` shows an always-visible bottom bar
+  (💼 Jobs · 🎨 Image · 🌦 Weather · ☰ Menu).
+- **Inline menu** — `/menu` opens a tappable grid.
+- **Action buttons on replies** — job results carry 🔁 Search again / ⭐ Save
+  watch; images carry 🎨 Another; weather carries 🔄 Refresh.
+- **Button-driven `/jobs`** — after the role, location and salary are chosen
+  by tapping buttons (with a "type it" fallback).
+
 The bot registers this menu automatically on startup via `set_my_commands`
 (see `handlers/bot_commands.py`), so the manual BotFather `/setcommands` step
 is optional.

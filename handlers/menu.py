@@ -6,7 +6,12 @@ Shown by /menu and attached to /start.
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.ext import ContextTypes
 
 from handlers.commands import ABOUT_MESSAGE, HELP_MESSAGE, render_history
@@ -14,6 +19,33 @@ from services.storage import get_recent_messages
 from utils.telegram_send import send_formatted_message
 
 MENU_PROMPT = "What would you like to do? 👇"
+
+# Persistent bottom button bar labels (also matched by the router below).
+BTN_JOBS = "💼 Jobs"
+BTN_IMAGE = "🎨 Image"
+BTN_WEATHER = "🌦 Weather"
+BTN_MENU = "☰ Menu"
+
+
+def persistent_keyboard() -> ReplyKeyboardMarkup:
+    """Always-visible button bar at the bottom of the chat."""
+    return ReplyKeyboardMarkup(
+        [[BTN_JOBS, BTN_IMAGE], [BTN_WEATHER, BTN_MENU]],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+async def button_bar_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle taps on the persistent button bar (the Jobs button is routed by
+    the jobs conversation's entry point instead)."""
+    text = update.message.text
+    if text == BTN_MENU:
+        await update.message.reply_text(MENU_PROMPT, reply_markup=main_menu_keyboard())
+    elif text == BTN_IMAGE:
+        await update.message.reply_text("🎨 Send /image followed by a description, e.g. `/image a sunset over Kuala Lumpur`", parse_mode="Markdown")
+    elif text == BTN_WEATHER:
+        await update.message.reply_text("🌦 Send /weather followed by a city, e.g. `/weather Kuala Lumpur`", parse_mode="Markdown")
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:

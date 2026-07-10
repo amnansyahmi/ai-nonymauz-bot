@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from telegram import Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    Update,
+)
 from telegram.ext import (
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
@@ -22,8 +28,35 @@ from utils.telegram_send import send_formatted_reply, typing_action
 logger = logging.getLogger(__name__)
 
 # Guided /jobs conversation states.
-ASK_TITLE, ASK_LOCATION, ASK_SALARY = range(3)
+ASK_TITLE, ASK_LOCATION, ASK_LOCATION_TEXT, ASK_SALARY = range(4)
 _SKIP_WORDS = {"any", "skip", "no", "none", "-"}
+
+
+def _location_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Kuala Lumpur", callback_data="loc:Kuala Lumpur"),
+         InlineKeyboardButton("Selangor", callback_data="loc:Selangor")],
+        [InlineKeyboardButton("Penang", callback_data="loc:Penang"),
+         InlineKeyboardButton("Johor", callback_data="loc:Johor")],
+        [InlineKeyboardButton("🌐 Anywhere", callback_data="loc:__any__"),
+         InlineKeyboardButton("✍️ Type it", callback_data="loc:__type__")],
+    ])
+
+
+def _salary_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("< RM3k", callback_data="sal:below 3000"),
+         InlineKeyboardButton("RM3k–5k", callback_data="sal:3000-5000")],
+        [InlineKeyboardButton("RM5k+", callback_data="sal:above 5000"),
+         InlineKeyboardButton("Skip", callback_data="sal:__skip__")],
+    ])
+
+
+def _job_actions_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔁 Search again", callback_data="act:jobs_again"),
+        InlineKeyboardButton("⭐ Save watch", callback_data="act:jobs_save"),
+    ]])
 
 
 def _job_search_prompt(query: str) -> str:
@@ -61,19 +94,21 @@ async def job_results_text(chat_id: int, query: str) -> str:
     return await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
 
 
-async def _run_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str) -> None:
-    chat_id = update.effective_chat.id
+async def _run_and_reply(message: Message, context: ContextTypes.DEFAULT_TYPE, query: str) -> None:
+    """Run a search and reply to `message`, with action buttons attached."""
+    chat_id = message.chat_id
     if not message_limiter.allow(chat_id):
-        await update.message.reply_text("⏳ You're searching a bit fast. Please wait a few seconds and try again.")
+        await message.reply_text("⏳ You're searching a bit fast. Please wait a few seconds and try again.")
         return
     try:
         async with typing_action(context, chat_id):
             reply = await job_results_text(chat_id, query)
     except CloudClientError:
         logger.exception("Job search failed for chat %s", chat_id)
-        await update.message.reply_text("⚠️ Sorry, job search isn't available right now. Please try again shortly.")
+        await message.reply_text("⚠️ Sorry, job search isn't available right now. Please try again shortly.")
         return
-    await send_formatted_reply(update.message, reply)
+    context.user_data["last_job_query"] = query
+    await send_formatted_reply(message, reply, reply_markup=_job_actions_keyboard())
 
 
 # ── Guided /jobs conversation ────────────────────────────────────────────────
@@ -82,7 +117,7 @@ async def jobs_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Power-user shortcut: `/jobs <query>` runs immediately, no questions.
     query = " ".join(context.args).strip() if context.args else ""
     if query:
-        await _run_and_reply(update, context, query)
+        await _run_and_reply(update.message, context, query)
         return ConversationHandler.END
 
     context.user_data.pop("job_title", None)
@@ -97,26 +132,40 @@ async def jobs_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def received_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["job_title"] = update.message.text.strip()
-    await update.message.reply_text("📍 Which location? (e.g. Selangor, Kuala Lumpur — or type 'any')")
+    await update.message.reply_text("📍 Which location?", reply_markup=_location_keyboard())
     return ASK_LOCATION
 
 
-async def received_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    answer = update.message.text.strip()
-    context.user_data["job_location"] = "" if answer.lower() in _SKIP_WORDS else answer
-    await update.message.reply_text("💰 Minimum expected monthly salary? (e.g. 3000 — or type 'skip')")
+async def location_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    value = query.data.split(":", 1)[1]
+    if value == "__type__":
+        await query.message.reply_text("✍️ Type the location you want:")
+        return ASK_LOCATION_TEXT
+    context.user_data["job_location"] = "" if value == "__any__" else value
+    await query.message.reply_text("💰 Expected monthly salary?", reply_markup=_salary_keyboard())
     return ASK_SALARY
 
 
-async def received_salary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def location_typed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     answer = update.message.text.strip()
-    salary = "" if answer.lower() in _SKIP_WORDS else answer
-    query = build_job_query(
+    context.user_data["job_location"] = "" if answer.lower() in _SKIP_WORDS else answer
+    await update.message.reply_text("💰 Expected monthly salary?", reply_markup=_salary_keyboard())
+    return ASK_SALARY
+
+
+async def salary_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    value = query.data.split(":", 1)[1]
+    salary = "" if value == "__skip__" else value
+    search_query = build_job_query(
         context.user_data.get("job_title", ""),
         context.user_data.get("job_location", ""),
         salary,
     )
-    await _run_and_reply(update, context, query)
+    await _run_and_reply(query.message, context, search_query)
     return ConversationHandler.END
 
 
@@ -125,13 +174,39 @@ async def cancel_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
+async def jobs_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the 🔁 Search again / ⭐ Save watch buttons under job results."""
+    query = update.callback_query
+    await query.answer()
+    action = query.data.split(":", 1)[1]
+    last_query = context.user_data.get("last_job_query")
+    if not last_query:
+        await query.message.reply_text("That search has expired — run /jobs again.")
+        return
+
+    if action == "jobs_again":
+        await _run_and_reply(query.message, context, last_query)
+    elif action == "jobs_save":
+        watch = await add_job_watch(chat_id=query.message.chat_id, query=last_query)
+        await query.message.reply_text(
+            f"⭐ Saved watch #{watch.id} for \"{last_query}\". "
+            "I'll alert you when the results change. See /myjobs."
+        )
+
+
 def build_jobs_conversation() -> ConversationHandler:
+    from handlers.menu import BTN_JOBS
+
     return ConversationHandler(
-        entry_points=[CommandHandler("jobs", jobs_entry)],
+        entry_points=[
+            CommandHandler("jobs", jobs_entry),
+            MessageHandler(filters.Text([BTN_JOBS]), jobs_entry),
+        ],
         states={
             ASK_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_title)],
-            ASK_LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_location)],
-            ASK_SALARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_salary)],
+            ASK_LOCATION: [CallbackQueryHandler(location_chosen, pattern=r"^loc:")],
+            ASK_LOCATION_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, location_typed)],
+            ASK_SALARY: [CallbackQueryHandler(salary_chosen, pattern=r"^sal:")],
         },
         fallbacks=[CommandHandler("cancel", cancel_jobs)],
     )
