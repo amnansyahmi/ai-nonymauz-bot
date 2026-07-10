@@ -20,7 +20,11 @@ HELP_MESSAGE = (
     "/start - Start the bot\n"
     "/help - View available commands\n"
     "/about - About AI Nonymauz\n"
-    "/reset - Reset the conversation\n\n"
+    "/reset - Reset the conversation\n"
+    "/jobs <role> - Search for job vacancies now\n"
+    "/watchjob <role> - Save a job search to check later\n"
+    "/myjobs - List your saved job watches\n"
+    "/unwatchjob <id> - Remove a saved job watch\n\n"
     "You can also just send me a normal text message."
 )
 

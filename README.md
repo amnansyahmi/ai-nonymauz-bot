@@ -73,7 +73,18 @@ start - Start the bot
 help - View available commands
 about - About AI Nonymauz
 reset - Reset the conversation
+jobs - Search for job vacancies now
+watchjob - Save a job search to check later
+myjobs - List your saved job watches
+unwatchjob - Remove a saved job watch
 ```
+
+`/jobs <role>` is fully functional today — it asks ai-nonymauz-cloud to search
+for current vacancies and returns the results. `/watchjob` only *saves* a
+search (in SQLite, see `services/storage.py`) for now; there's no scheduler
+yet to periodically re-check it and push a Telegram notification. That's a
+Phase 4 follow-up once a persistence/scheduling story (external DB + either a
+cron-triggered endpoint or a paid always-on worker) is decided.
 
 ## Project structure
 
@@ -83,10 +94,14 @@ ai-nonymauz-bot/
 ├── config.py            # Environment variable loading
 ├── handlers/
 │   ├── commands.py      # /start /help /about /reset
+│   ├── jobs.py           # /jobs /watchjob /unwatchjob /myjobs
 │   ├── messages.py      # Plain text message handler
 │   └── errors.py        # Global error handler
 ├── services/
-│   └── cloud_client.py  # HTTP client for ai-nonymauz-cloud
+│   ├── cloud_client.py  # HTTP client for ai-nonymauz-cloud
+│   └── storage.py        # SQLite persistence for job watches
+├── utils/
+│   └── formatting.py     # Markdown -> Telegram HTML conversion
 ├── requirements.txt
 ├── Dockerfile
 └── render.yaml
@@ -110,3 +125,8 @@ Render injects `PORT` and `RENDER_EXTERNAL_URL` automatically, which `config.py`
 up, so no extra webhook configuration is needed. Note that free Web Services spin down
 after periods of inactivity — the first message after idle time will have a cold-start
 delay of a few seconds before the bot replies.
+
+**Storage note**: job watches are stored in a local SQLite file (`DB_PATH`, default
+`data/bot.db`). Render's free-tier filesystem is not guaranteed to survive a redeploy
+(only plain restarts), so saved watches may be lost when you push a new version. Move
+to a hosted database if that becomes a real problem.
