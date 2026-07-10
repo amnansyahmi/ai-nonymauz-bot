@@ -13,7 +13,7 @@ BOT_COMMANDS = [
     BotCommand("help", "View available commands"),
     BotCommand("about", "About AI Nonymauz"),
     BotCommand("reset", "Reset the conversation"),
-    BotCommand("jobs", "Search for job vacancies now"),
+    BotCommand("jobs", "Guided job search (title, location, salary)"),
     BotCommand("watchjob", "Save a job search to check later"),
     BotCommand("myjobs", "List your saved job watches"),
     BotCommand("unwatchjob", "Remove a saved job watch"),

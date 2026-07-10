@@ -1,11 +1,17 @@
-"""Job search commands: /jobs, /watchjob, /unwatchjob, /myjobs."""
+"""Job search commands: /jobs (guided), /watchjob, /unwatchjob, /myjobs."""
 
 from __future__ import annotations
 
 import logging
 
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import (
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+)
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
 from services.jobs_api import format_postings, jsearch
@@ -15,6 +21,10 @@ from utils.telegram_send import send_formatted_reply, typing_action
 
 logger = logging.getLogger(__name__)
 
+# Guided /jobs conversation states.
+ASK_TITLE, ASK_LOCATION, ASK_SALARY = range(3)
+_SKIP_WORDS = {"any", "skip", "no", "none", "-"}
+
 
 def _job_search_prompt(query: str) -> str:
     return (
@@ -22,6 +32,16 @@ def _job_search_prompt(query: str) -> str:
         "List up to 5 openings with job title, company, location, and a link "
         "if available. If you can't find real postings, say so plainly."
     )
+
+
+def build_job_query(title: str, location: str = "", salary: str = "") -> str:
+    """Assemble a search query from the guided answers."""
+    query = title.strip()
+    if location.strip():
+        query += f" in {location.strip()}"
+    if salary.strip():
+        query += f" salary {salary.strip()}"
+    return query
 
 
 async def job_results_text(chat_id: int, query: str) -> str:
@@ -41,17 +61,11 @@ async def job_results_text(chat_id: int, query: str) -> str:
     return await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
 
 
-async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = " ".join(context.args).strip() if context.args else ""
-    if not query:
-        await update.message.reply_text("Usage: /jobs <role or keyword>\nExample: /jobs software engineer in Johor Bahru")
-        return
-
+async def _run_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, query: str) -> None:
     chat_id = update.effective_chat.id
     if not message_limiter.allow(chat_id):
         await update.message.reply_text("⏳ You're searching a bit fast. Please wait a few seconds and try again.")
         return
-
     try:
         async with typing_action(context, chat_id):
             reply = await job_results_text(chat_id, query)
@@ -59,8 +73,68 @@ async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("Job search failed for chat %s", chat_id)
         await update.message.reply_text("⚠️ Sorry, job search isn't available right now. Please try again shortly.")
         return
-
     await send_formatted_reply(update.message, reply)
+
+
+# ── Guided /jobs conversation ────────────────────────────────────────────────
+
+async def jobs_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Power-user shortcut: `/jobs <query>` runs immediately, no questions.
+    query = " ".join(context.args).strip() if context.args else ""
+    if query:
+        await _run_and_reply(update, context, query)
+        return ConversationHandler.END
+
+    context.user_data.pop("job_title", None)
+    context.user_data.pop("job_location", None)
+    await update.message.reply_text(
+        "Let's find some jobs! 🔎\n\n"
+        "What job title or role are you looking for? (e.g. software engineer)\n"
+        "Send /cancel any time to stop."
+    )
+    return ASK_TITLE
+
+
+async def received_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["job_title"] = update.message.text.strip()
+    await update.message.reply_text("📍 Which location? (e.g. Selangor, Kuala Lumpur — or type 'any')")
+    return ASK_LOCATION
+
+
+async def received_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    answer = update.message.text.strip()
+    context.user_data["job_location"] = "" if answer.lower() in _SKIP_WORDS else answer
+    await update.message.reply_text("💰 Minimum expected monthly salary? (e.g. 3000 — or type 'skip')")
+    return ASK_SALARY
+
+
+async def received_salary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    answer = update.message.text.strip()
+    salary = "" if answer.lower() in _SKIP_WORDS else answer
+    query = build_job_query(
+        context.user_data.get("job_title", ""),
+        context.user_data.get("job_location", ""),
+        salary,
+    )
+    await _run_and_reply(update, context, query)
+    return ConversationHandler.END
+
+
+async def cancel_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Job search cancelled.")
+    return ConversationHandler.END
+
+
+def build_jobs_conversation() -> ConversationHandler:
+    return ConversationHandler(
+        entry_points=[CommandHandler("jobs", jobs_entry)],
+        states={
+            ASK_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_title)],
+            ASK_LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_location)],
+            ASK_SALARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_salary)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_jobs)],
+    )
 
 
 async def watchjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

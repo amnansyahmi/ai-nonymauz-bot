@@ -91,9 +91,12 @@ The bot registers this menu automatically on startup via `set_my_commands`
 (see `handlers/bot_commands.py`), so the manual BotFather `/setcommands` step
 is optional.
 
-`/jobs <role>` searches on demand. `/watchjob <role>` saves a search that the
-bot re-checks on a schedule and messages you about when the results change
-(see "Job-watch notifications" below).
+`/jobs` starts a guided search — it asks for the job title, location, and
+minimum expected salary, then returns matching openings. Power users can skip
+the questions with a one-shot form: `/jobs software engineer in Selangor`.
+`/watchjob <role>` saves a search that the bot re-checks on a schedule and
+messages you about when the results change (see "Job-watch notifications"
+below).
 
 **Job data source**: if `JSEARCH_API_KEY` is set, `/jobs` and watches use the
 [JSearch API](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch)

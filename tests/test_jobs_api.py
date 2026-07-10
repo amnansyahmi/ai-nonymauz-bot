@@ -111,6 +111,19 @@ async def test_search_http_error_wrapped(monkeypatch):
         await JSearchClient(api_key="k").search("dev")
 
 
+async def test_salary_parsed_from_item(monkeypatch):
+    payload = {
+        "status": "OK",
+        "data": [{
+            "job_title": "Eng", "employer_name": "Acme",
+            "job_min_salary": 3000, "job_max_salary": 5000, "job_salary_period": "MONTH",
+        }],
+    }
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _FakeClient(payload))
+    postings = await JSearchClient(api_key="k").search("eng")
+    assert postings[0].salary == "3,000–5,000/month"
+
+
 def test_format_postings_empty():
     out = format_postings("dev in KL", [])
     assert "No current openings" in out

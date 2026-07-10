@@ -37,6 +37,7 @@ class JobPosting:
     location: str
     url: str
     employment_type: str | None
+    salary: str | None = None
 
 
 # JSearch returns ~10 results per page and charges one request per page, so
@@ -122,9 +123,23 @@ class JSearchClient:
                     location=location,
                     url=item.get("job_apply_link") or "",
                     employment_type=item.get("job_employment_type"),
+                    salary=_format_salary(item),
                 )
             )
         return postings
+
+
+def _format_salary(item: dict) -> str | None:
+    lo = item.get("job_min_salary")
+    hi = item.get("job_max_salary")
+    period = (item.get("job_salary_period") or "").lower()
+    if not lo and not hi:
+        return None
+    if lo and hi:
+        amount = f"{int(lo):,}–{int(hi):,}"
+    else:
+        amount = f"{int(lo or hi):,}"
+    return f"{amount}/{period}" if period else amount
 
 
 def format_postings(query: str, postings: list[JobPosting]) -> str:
@@ -137,6 +152,8 @@ def format_postings(query: str, postings: list[JobPosting]) -> str:
         meta = " · ".join(x for x in (p.location, p.employment_type) if x)
         if meta:
             line += f"\n📍 {meta}"
+        if p.salary:
+            line += f"\n💰 {p.salary}"
         if p.url:
             line += f"\n🔗 {p.url}"
         lines.append(line)

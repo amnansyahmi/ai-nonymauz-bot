@@ -16,7 +16,7 @@ from handlers.bot_commands import BOT_COMMANDS
 from handlers.commands import about, help_command, history, reset, start, summarize
 from handlers.diag import diag
 from handlers.errors import handle_error
-from handlers.jobs import jobs, myjobs, unwatchjob, watchjob
+from handlers.jobs import build_jobs_conversation, myjobs, unwatchjob, watchjob
 from handlers.media import handle_photo, handle_voice, image, weather
 from handlers.messages import handle_text
 from services.storage import init_db
@@ -51,7 +51,7 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("about", about))
     application.add_handler(CommandHandler("reset", reset))
-    application.add_handler(CommandHandler("jobs", jobs))
+    application.add_handler(build_jobs_conversation())
     application.add_handler(CommandHandler("watchjob", watchjob))
     application.add_handler(CommandHandler("unwatchjob", unwatchjob))
     application.add_handler(CommandHandler("myjobs", myjobs))

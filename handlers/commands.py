@@ -26,7 +26,7 @@ HELP_MESSAGE = (
     "/help - View available commands\n"
     "/about - About AI Nonymauz\n"
     "/reset - Reset the conversation\n"
-    "/jobs <role> - Search for job vacancies now\n"
+    "/jobs - Guided job search (title, location, salary)\n"
     "/watchjob <role> - Save a job search to check later\n"
     "/myjobs - List your saved job watches\n"
     "/unwatchjob <id> - Remove a saved job watch\n"
