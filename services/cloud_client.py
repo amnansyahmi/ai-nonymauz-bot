@@ -4,17 +4,21 @@ The bot has no AI logic of its own — every user message is forwarded here
 and the response is relayed back to Telegram. Until AI_NONYMAUZ_CLOUD_URL is
 configured, a placeholder reply is returned instead.
 
-Contract (adjust here if the real ai-nonymauz-cloud API differs):
-  POST   {base_url}/api/v1/chat            {"session_id": ..., "message": ...} -> {"reply": ...}
-  DELETE {base_url}/api/v1/chat/{session_id}   clears server-side conversation history
+Confirmed contract (verified live against https://ai-nonymauz-cloud.vercel.app):
+  POST {base_url}/chat
+    body: {"messages": [{"role": "user", "content": "..."}], "stream": false}
+    response: OpenAI-style chat completion, e.g.
+      {"choices": [{"message": {"content": "...", "reasoning": "..."}}], ...}
 
-The Telegram chat_id is used as the session_id, so ai-nonymauz-cloud owns
-conversation history and the bot only ever sends the latest message.
+The API is stateless per request — it has no session/reset endpoint, so the
+bot only sends the latest message. Conversation history/memory is a Phase 3
+feature to be added on the bot side (or once ai-nonymauz-cloud exposes one).
 """
 
 from __future__ import annotations
 
 import logging
+import re
 
 import httpx
 
@@ -22,13 +26,15 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+_THINK_TAG_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
 
 class CloudClientError(Exception):
     """Raised when ai-nonymauz-cloud cannot be reached or returns an error."""
 
 
 class CloudClient:
-    def __init__(self, base_url: str | None, api_key: str | None, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str | None, api_key: str | None, timeout: float = 60.0) -> None:
         self._base_url = base_url.rstrip("/") if base_url else None
         self._api_key = api_key
         self._timeout = timeout
@@ -44,12 +50,15 @@ class CloudClient:
             logger.warning("AI_NONYMAUZ_CLOUD_URL not configured; returning placeholder reply")
             return f"(Phase 1 placeholder) You said: {text}"
 
-        payload = {"session_id": session_id, "message": text}
+        payload = {
+            "messages": [{"role": "user", "content": text}],
+            "stream": False,
+        }
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(
-                    f"{self._base_url}/api/v1/chat",
+                    f"{self._base_url}/chat",
                     json=payload,
                     headers=self._headers(),
                 )
@@ -58,24 +67,18 @@ class CloudClient:
         except httpx.HTTPError as exc:
             raise CloudClientError(f"Failed to reach ai-nonymauz-cloud: {exc}") from exc
 
-        reply = data.get("reply")
-        if not reply:
-            raise CloudClientError("ai-nonymauz-cloud response missing 'reply' field")
-        return reply
+        choices = data.get("choices") or []
+        if not choices:
+            raise CloudClientError("ai-nonymauz-cloud response missing 'choices'")
 
-    async def reset_session(self, session_id: int) -> None:
-        if not self._base_url:
-            return
+        content = choices[0].get("message", {}).get("content")
+        if not content:
+            raise CloudClientError("ai-nonymauz-cloud response missing message content")
 
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.delete(
-                    f"{self._base_url}/api/v1/chat/{session_id}",
-                    headers=self._headers(),
-                )
-                response.raise_for_status()
-        except httpx.HTTPError as exc:
-            logger.warning("Failed to reset ai-nonymauz-cloud session %s: %s", session_id, exc)
+        # Some reasoning models inline their <think> trace into content instead
+        # of the separate 'reasoning' field — strip it before showing the user.
+        content = _THINK_TAG_RE.sub("", content).strip()
+        return content or "(empty response from AI Nonymauz)"
 
 
 ai_nonymauz_cloud = CloudClient(

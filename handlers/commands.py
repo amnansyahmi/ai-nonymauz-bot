@@ -7,8 +7,6 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from services.cloud_client import ai_nonymauz_cloud
-
 logger = logging.getLogger(__name__)
 
 START_MESSAGE = (
@@ -53,5 +51,4 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /reset", update.effective_user.id if update.effective_user else "unknown")
     context.user_data.clear()
-    await ai_nonymauz_cloud.reset_session(session_id=update.effective_chat.id)
     await update.message.reply_text(RESET_MESSAGE)

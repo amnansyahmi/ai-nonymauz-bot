@@ -14,22 +14,21 @@ Telegram User -> @ai_nonymauz_bots -> Telegram Bot (this repo) -> ai-nonymauz-cl
 handling, and a placeholder reply when `AI_NONYMAUZ_CLOUD_URL` is not yet configured.
 
 **Phase 2** (current): `services/cloud_client.py` forwards messages to ai-nonymauz-cloud
-once `AI_NONYMAUZ_CLOUD_URL` is set. Assumed API contract (update `cloud_client.py` if
-your real API differs):
+once `AI_NONYMAUZ_CLOUD_URL` is set. Verified live against the deployed API:
 
 ```
-POST   {AI_NONYMAUZ_CLOUD_URL}/api/v1/chat
-       body: {"session_id": <telegram_chat_id>, "message": "<text>"}
-       response: {"reply": "<text>"}
+POST {AI_NONYMAUZ_CLOUD_URL}/chat
+     body: {"messages": [{"role": "user", "content": "<text>"}], "stream": false}
+     response: OpenAI-style chat completion —
+       {"choices": [{"message": {"content": "<reply>", ...}}], ...}
 
-DELETE {AI_NONYMAUZ_CLOUD_URL}/api/v1/chat/{session_id}
-       clears server-side conversation history (called by /reset)
-
-Auth:  Authorization: Bearer <AI_NONYMAUZ_CLOUD_API_KEY>   (sent only if configured)
+Auth: Authorization: Bearer <AI_NONYMAUZ_CLOUD_API_KEY>   (sent only if configured;
+      not currently required by the deployed API)
 ```
 
-The Telegram chat_id is used as the session_id — ai-nonymauz-cloud is expected to own
-conversation history, so the bot only ever sends the latest message, not a transcript.
+The API is stateless per request — it has no session/reset endpoint, so `/reset`
+currently only clears bot-side state. Multi-turn conversation history (sending the
+full message transcript per request) is a Phase 3 item.
 
 ## Requirements
 
