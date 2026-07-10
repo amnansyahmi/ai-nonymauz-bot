@@ -39,18 +39,33 @@ class JobPosting:
     employment_type: str | None
 
 
+# JSearch returns ~10 results per page and charges one request per page, so
+# num_pages is derived from the desired result count to avoid wasting quota.
+_RESULTS_PER_PAGE = 10
+
+
 class JSearchClient:
-    def __init__(self, api_key: str | None, country: str = "my", timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        api_key: str | None,
+        country: str = "my",
+        max_results: int = 10,
+        timeout: float = 30.0,
+    ) -> None:
         self._api_key = api_key
         self._country = country
+        self._max_results = max_results
         self._timeout = timeout
 
     def is_enabled(self) -> bool:
         return bool(self._api_key)
 
-    async def search(self, query: str, limit: int = 5) -> list[JobPosting]:
+    async def search(self, query: str, limit: int | None = None) -> list[JobPosting]:
         if not self._api_key:
             raise JobsApiError("JSEARCH_API_KEY is not configured")
+
+        limit = limit or self._max_results
+        num_pages = max(1, -(-limit // _RESULTS_PER_PAGE))  # ceil division
 
         headers = {
             "X-RapidAPI-Key": self._api_key,
@@ -61,7 +76,7 @@ class JSearchClient:
         # /search-v2 contract (query, num_pages, country, date_posted).
         params = {
             "query": query,
-            "num_pages": "1",
+            "num_pages": str(num_pages),
             "country": self._country,
             "date_posted": "all",
         }
@@ -128,4 +143,8 @@ def format_postings(query: str, postings: list[JobPosting]) -> str:
     return "\n\n".join(lines)
 
 
-jsearch = JSearchClient(api_key=settings.jsearch_api_key, country=settings.jsearch_country)
+jsearch = JSearchClient(
+    api_key=settings.jsearch_api_key,
+    country=settings.jsearch_country,
+    max_results=settings.jsearch_max_results,
+)

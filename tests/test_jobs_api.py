@@ -78,6 +78,29 @@ async def test_search_uses_v2_endpoint_with_country(monkeypatch):
     assert captured["params"]["country"] == "my"
 
 
+async def test_num_pages_derived_from_result_count(monkeypatch):
+    captured = {}
+
+    class _CapturingClient(_FakeClient):
+        async def get(self, url, headers=None, params=None):
+            captured["params"] = params
+            return _FakeResponse({"status": "OK", "data": []})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _CapturingClient({}))
+    await JSearchClient(api_key="k", max_results=10).search("dev")
+    assert captured["params"]["num_pages"] == "1"
+    await JSearchClient(api_key="k", max_results=25).search("dev")
+    assert captured["params"]["num_pages"] == "3"
+
+
+async def test_nested_data_list_is_unwrapped(monkeypatch):
+    payload = {"status": "OK", "data": {"jobs": [{"job_title": "Eng", "employer_name": "Acme"}]}}
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **k: _FakeClient(payload))
+    postings = await JSearchClient(api_key="k").search("dev")
+    assert len(postings) == 1
+    assert postings[0].title == "Eng"
+
+
 async def test_search_http_error_wrapped(monkeypatch):
     class _BoomClient(_FakeClient):
         async def get(self, *a, **k):

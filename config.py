@@ -22,6 +22,7 @@ class Settings:
     cron_secret: str | None
     jsearch_api_key: str | None
     jsearch_country: str
+    jsearch_max_results: int
 
 
 def _require(name: str) -> str:
@@ -48,6 +49,7 @@ def load_settings() -> Settings:
         cron_secret=os.getenv("CRON_SECRET"),
         jsearch_api_key=os.getenv("JSEARCH_API_KEY") or os.getenv("RAPIDAPI_KEY"),
         jsearch_country=os.getenv("JSEARCH_COUNTRY", "my").lower(),
+        jsearch_max_results=int(os.getenv("JSEARCH_MAX_RESULTS", "10")),
     )
 
 
