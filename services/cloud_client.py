@@ -17,6 +17,7 @@ history (see services/storage.py) instead of just the latest turn.
 
 from __future__ import annotations
 
+import base64
 import logging
 import re
 
@@ -115,6 +116,37 @@ class CloudClient:
     async def send_message(self, session_id: int, text: str) -> str:
         """Single-turn convenience wrapper (no history) for one-off queries."""
         return await self.send_conversation(session_id, [{"role": "user", "content": text}])
+
+    async def generate_image(self, prompt: str) -> tuple[bytes, str]:
+        """Generate an image via ai-nonymauz-cloud. Returns (image_bytes, mime_type)."""
+        if not self._base_url:
+            raise CloudClientError("AI_NONYMAUZ_CLOUD_URL is not configured")
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(
+                    f"{self._base_url}/image/generate",
+                    json={"prompt": prompt},
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            # The API returns 429 when the daily image limit is hit, 402 when the
+            # image provider needs credits — surface those as a friendly message.
+            status = exc.response.status_code
+            if status == 429:
+                raise CloudClientError("The daily image generation limit has been reached. Try again tomorrow.") from exc
+            if status == 402:
+                raise CloudClientError("Image generation is temporarily unavailable (provider credits).") from exc
+            raise CloudClientError(f"Image generation failed: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise CloudClientError(f"Failed to reach ai-nonymauz-cloud: {exc}") from exc
+
+        image_base64 = data.get("image_base64")
+        if not image_base64:
+            raise CloudClientError("ai-nonymauz-cloud image response missing 'image_base64'")
+        return base64.b64decode(image_base64), data.get("mime_type", "image/jpeg")
 
 
 ai_nonymauz_cloud = CloudClient(

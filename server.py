@@ -20,7 +20,6 @@ from telegram.ext import Application
 from config import settings
 from services.job_notifications import make_notifier, search_for_watch
 from services.jobs_runner import run_job_watches
-from services.storage import init_db
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +30,11 @@ def build_server(application: Application) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        await init_db()
+        # Imported here to avoid a circular import (bot imports server).
+        from bot import on_startup
+
         await application.initialize()
+        await on_startup(application)
         await application.start()
         await application.bot.set_webhook(
             url=webhook_url,

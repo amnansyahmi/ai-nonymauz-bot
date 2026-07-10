@@ -12,9 +12,11 @@ from telegram.ext import (
 )
 
 from config import settings
+from handlers.bot_commands import BOT_COMMANDS
 from handlers.commands import about, help_command, reset, start
 from handlers.errors import handle_error
 from handlers.jobs import jobs, myjobs, unwatchjob, watchjob
+from handlers.media import image, weather
 from handlers.messages import handle_text
 from services.storage import init_db
 
@@ -27,12 +29,15 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-async def _post_init(application: Application) -> None:
+async def on_startup(application: Application) -> None:
+    """Shared startup: runs for both polling (via post_init) and webhook (via
+    the server lifespan). Idempotent."""
     await init_db()
+    await application.bot.set_my_commands(BOT_COMMANDS)
 
 
 def build_application() -> Application:
-    application = Application.builder().token(settings.telegram_bot_token).post_init(_post_init).build()
+    application = Application.builder().token(settings.telegram_bot_token).post_init(on_startup).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
@@ -42,6 +47,8 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("watchjob", watchjob))
     application.add_handler(CommandHandler("unwatchjob", unwatchjob))
     application.add_handler(CommandHandler("myjobs", myjobs))
+    application.add_handler(CommandHandler("image", image))
+    application.add_handler(CommandHandler("weather", weather))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     application.add_error_handler(handle_error)

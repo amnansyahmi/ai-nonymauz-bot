@@ -26,7 +26,9 @@ HELP_MESSAGE = (
     "/jobs <role> - Search for job vacancies now\n"
     "/watchjob <role> - Save a job search to check later\n"
     "/myjobs - List your saved job watches\n"
-    "/unwatchjob <id> - Remove a saved job watch\n\n"
+    "/unwatchjob <id> - Remove a saved job watch\n"
+    "/image <description> - Generate an image\n"
+    "/weather <city> - Get the current weather\n\n"
     "You can also just send me a normal text message."
 )
 

@@ -77,7 +77,13 @@ jobs - Search for job vacancies now
 watchjob - Save a job search to check later
 myjobs - List your saved job watches
 unwatchjob - Remove a saved job watch
+image - Generate an image from a description
+weather - Get the current weather
 ```
+
+The bot registers this menu automatically on startup via `set_my_commands`
+(see `handlers/bot_commands.py`), so the manual BotFather `/setcommands` step
+is optional.
 
 `/jobs <role>` searches on demand. `/watchjob <role>` saves a search that the
 bot re-checks on a schedule and messages you about when the results change
@@ -117,16 +123,21 @@ ai-nonymauz-bot/
 ├── config.py            # Environment variable loading
 ├── handlers/
 │   ├── commands.py      # /start /help /about /reset
+│   ├── bot_commands.py  # The command menu registered on startup
 │   ├── jobs.py          # /jobs /watchjob /unwatchjob /myjobs
+│   ├── media.py         # /image /weather
 │   ├── messages.py      # Plain text message handler (with conversation memory)
 │   └── errors.py        # Global error handler
 ├── services/
-│   ├── cloud_client.py       # HTTP client for ai-nonymauz-cloud
+│   ├── cloud_client.py       # HTTP client for ai-nonymauz-cloud (chat + image)
 │   ├── storage.py            # SQLite: conversation history + job watches
 │   ├── jobs_runner.py        # Scheduled watch runner (dedup + notify)
 │   └── job_notifications.py  # Production search/notify wiring for the runner
 ├── utils/
-│   └── formatting.py    # Markdown -> Telegram HTML conversion
+│   ├── formatting.py    # Markdown -> Telegram HTML conversion
+│   ├── telegram_send.py # Long-message splitting, HTML fallback, typing keep-alive
+│   └── rate_limit.py    # Per-chat rate limiting
+├── tests/               # pytest suite
 ├── .github/workflows/
 │   └── job-watch-cron.yml    # Free cron that triggers the watch runner
 ├── requirements.txt
