@@ -34,6 +34,13 @@ async def on_startup(application: Application) -> None:
     the server lifespan). Idempotent."""
     await init_db()
     await application.bot.set_my_commands(BOT_COMMANDS)
+    from services.jobs_api import jsearch
+
+    logger.info(
+        "Config: cloud=%s | JSearch jobs API=%s",
+        "set" if settings.ai_nonymauz_cloud_url else "UNSET",
+        "enabled" if jsearch.is_enabled() else "disabled (JSEARCH_API_KEY unset)",
+    )
 
 
 def build_application() -> Application:
