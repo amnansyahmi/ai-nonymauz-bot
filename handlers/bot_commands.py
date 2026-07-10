@@ -24,3 +24,13 @@ BOT_COMMANDS = [
 # Note: /history and /unwatchjob still work if typed, but are intentionally
 # kept out of the menu — /summarize covers recall, and /myjobs has a delete
 # button that replaces /unwatchjob.
+
+# Shown on the bot's start screen (before a user presses Start).
+BOT_DESCRIPTION = (
+    "AI Nonymauz — your AI assistant on Telegram. 💬 Chat with memory, 🖼 describe "
+    "photos, 🎨 generate images, 🌦 check the weather, and 💼 search real job "
+    "listings. Tap Start to begin!"
+)
+
+# Shown on the bot's profile card (keep it short — max 120 chars).
+BOT_SHORT_DESCRIPTION = "Your AI assistant: chat, images, vision, weather & real job search. 💬🎨💼"

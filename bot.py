@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 from config import settings
-from handlers.bot_commands import BOT_COMMANDS
+from handlers.bot_commands import BOT_COMMANDS, BOT_DESCRIPTION, BOT_SHORT_DESCRIPTION
 from handlers.commands import about, help_command, history, reset, start, summarize
 from handlers.diag import diag
 from handlers.errors import handle_error
@@ -51,6 +51,11 @@ async def on_startup(application: Application) -> None:
     the server lifespan). Idempotent."""
     await init_db()
     await application.bot.set_my_commands(BOT_COMMANDS)
+    try:
+        await application.bot.set_my_description(BOT_DESCRIPTION)
+        await application.bot.set_my_short_description(BOT_SHORT_DESCRIPTION)
+    except Exception:  # noqa: BLE001 - branding is best-effort, never block startup
+        logger.warning("Failed to set bot description", exc_info=True)
     from services.jobs_api import jsearch
 
     logger.info(

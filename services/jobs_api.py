@@ -142,22 +142,35 @@ def _format_salary(item: dict) -> str | None:
     return f"{amount}/{period}" if period else amount
 
 
-def format_postings(query: str, postings: list[JobPosting]) -> str:
-    if not postings:
-        return f"No current openings found for \"{query}\". Try a broader search or a different location."
+NO_RESULTS = "No current openings found for \"{query}\". Try a broader search or a different location."
 
-    lines = [f"Found {len(postings)} opening(s) for \"{query}\":\n"]
-    for p in postings:
-        line = f"**{p.title}** — {p.company}"
-        meta = " · ".join(x for x in (p.location, p.employment_type) if x)
-        if meta:
-            line += f"\n📍 {meta}"
-        if p.salary:
-            line += f"\n💰 {p.salary}"
-        if p.url:
-            line += f"\n🔗 {p.url}"
-        lines.append(line)
-    return "\n\n".join(lines)
+
+def _posting_card(p: JobPosting) -> str:
+    line = f"**{p.title}** — {p.company}"
+    meta = " · ".join(x for x in (p.location, p.employment_type) if x)
+    if meta:
+        line += f"\n📍 {meta}"
+    if p.salary:
+        line += f"\n💰 {p.salary}"
+    if p.url:
+        line += f"\n🔗 {p.url}"
+    return line
+
+
+def format_postings(query: str, postings: list[JobPosting]) -> str:
+    """Full list (used by the scheduled watch notifier)."""
+    if not postings:
+        return NO_RESULTS.format(query=query)
+    header = f"Found {len(postings)} opening(s) for \"{query}\":\n"
+    return "\n\n".join([header] + [_posting_card(p) for p in postings])
+
+
+def format_postings_page(query: str, postings: list[JobPosting], offset: int, page_size: int) -> str:
+    """One page of results, with a 'showing X–Y of N' header (interactive /jobs)."""
+    total = len(postings)
+    end = min(offset + page_size, total)
+    header = f"💼 \"{query}\" — showing {offset + 1}–{end} of {total}\n"
+    return "\n\n".join([header] + [_posting_card(p) for p in postings[offset:end]])
 
 
 jsearch = JSearchClient(

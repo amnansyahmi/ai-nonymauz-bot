@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -55,11 +56,23 @@ ABOUT_MESSAGE = (
     "Type /help to see everything I can do."
 )
 
+_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo.jpg"
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /start", update.effective_user.id if update.effective_user else "unknown")
     from handlers.menu import persistent_keyboard  # lazy import avoids a cycle
 
-    await update.message.reply_text(START_MESSAGE, parse_mode="Markdown", reply_markup=persistent_keyboard())
+    keyboard = persistent_keyboard()
+    # Send the logo with the welcome as a caption for a branded first impression;
+    # fall back to a plain text welcome if the asset is missing.
+    if _LOGO_PATH.exists():
+        with _LOGO_PATH.open("rb") as logo:
+            await update.message.reply_photo(
+                photo=logo, caption=START_MESSAGE, parse_mode="Markdown", reply_markup=keyboard
+            )
+    else:
+        await update.message.reply_text(START_MESSAGE, parse_mode="Markdown", reply_markup=keyboard)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

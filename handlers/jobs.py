@@ -20,7 +20,7 @@ from telegram.ext import (
 )
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
-from services.jobs_api import format_postings, jsearch
+from services.jobs_api import format_postings, format_postings_page, jsearch
 from services.storage import add_job_watch, list_job_watches, remove_job_watch
 from utils.rate_limit import message_limiter
 from utils.telegram_send import send_formatted_reply, typing_action
@@ -52,13 +52,6 @@ def _salary_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def _job_actions_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔁 Search again", callback_data="act:jobs_again"),
-        InlineKeyboardButton("⭐ Save watch", callback_data="act:jobs_save"),
-    ]])
-
-
 def _job_search_prompt(query: str) -> str:
     return (
         f"Search for current job vacancy / hiring listings for: {query}. "
@@ -77,38 +70,68 @@ def build_job_query(title: str, location: str = "", salary: str = "") -> str:
     return query
 
 
-async def job_results_text(chat_id: int, query: str) -> str:
-    """Get job results for a query as a text block.
+PAGE_SIZE = 5
 
-    Prefers the JSearch API (real structured listings). Falls back to the
-    ai-nonymauz-cloud web search when JSearch isn't configured or errors out.
-    Shared by the /jobs command and the scheduled watch runner.
-    """
+
+async def _fetch_jobs(chat_id: int, query: str):
+    """Returns (postings, fallback_text). postings is a list when JSearch is
+    used (enabling pagination); None when we fell back to the cloud web search."""
     if jsearch.is_enabled():
         try:
-            postings = await jsearch.search(query)
-            return format_postings(query, postings)
+            return await jsearch.search(query), ""
         except Exception:  # noqa: BLE001 - never let a jobs-API issue break the reply
             logger.warning("JSearch failed for %r; falling back to cloud search", query, exc_info=True)
+    text = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
+    return None, text
 
-    return await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
+
+async def job_results_text(chat_id: int, query: str) -> str:
+    """Full results as a text block — used by the scheduled watch notifier."""
+    postings, text = await _fetch_jobs(chat_id, query)
+    return format_postings(query, postings) if postings is not None else text
+
+
+def _results_keyboard(has_more: bool) -> InlineKeyboardMarkup:
+    rows = [[
+        InlineKeyboardButton("🔁 Search again", callback_data="act:jobs_again"),
+        InlineKeyboardButton("⭐ Save watch", callback_data="act:jobs_save"),
+    ]]
+    if has_more:
+        rows.append([InlineKeyboardButton("➡️ Show more", callback_data="act:jobs_more")])
+    return InlineKeyboardMarkup(rows)
 
 
 async def _run_and_reply(message: Message, context: ContextTypes.DEFAULT_TYPE, query: str) -> None:
-    """Run a search and reply to `message`, with action buttons attached."""
+    """Run a search and reply to `message`, paginated with action buttons."""
     chat_id = message.chat_id
     if not message_limiter.allow(chat_id):
         await message.reply_text("⏳ You're searching a bit fast. Please wait a few seconds and try again.")
         return
     try:
         async with typing_action(context, chat_id):
-            reply = await job_results_text(chat_id, query)
+            postings, text = await _fetch_jobs(chat_id, query)
     except CloudClientError:
         logger.exception("Job search failed for chat %s", chat_id)
         await message.reply_text("⚠️ Sorry, job search isn't available right now. Please try again shortly.")
         return
+
     context.user_data["last_job_query"] = query
-    await send_formatted_reply(message, reply, reply_markup=_job_actions_keyboard())
+
+    if postings is None:  # cloud fallback — plain text, no pagination
+        await send_formatted_reply(message, text, reply_markup=_results_keyboard(False))
+        return
+    if not postings:
+        await send_formatted_reply(message, format_postings(query, []))
+        return
+
+    context.user_data["job_postings"] = postings
+    context.user_data["job_offset"] = 0
+    has_more = len(postings) > PAGE_SIZE
+    await send_formatted_reply(
+        message,
+        format_postings_page(query, postings, 0, PAGE_SIZE),
+        reply_markup=_results_keyboard(has_more),
+    )
 
 
 # ── Guided /jobs conversation ────────────────────────────────────────────────
@@ -175,7 +198,7 @@ async def cancel_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def jobs_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the 🔁 Search again / ⭐ Save watch buttons under job results."""
+    """Handle 🔁 Search again / ⭐ Save watch / ➡️ Show more under job results."""
     query = update.callback_query
     await query.answer()
     action = query.data.split(":", 1)[1]
@@ -191,6 +214,24 @@ async def jobs_action_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text(
             f"⭐ Saved watch #{watch.id} for \"{last_query}\". "
             "I'll alert you when the results change. See /myjobs."
+        )
+    elif action == "jobs_more":
+        postings = context.user_data.get("job_postings")
+        offset = context.user_data.get("job_offset", 0) + PAGE_SIZE
+        if not postings or offset >= len(postings):
+            await query.message.reply_text("No more results — try /jobs for a fresh search.")
+            return
+        context.user_data["job_offset"] = offset
+        # Retire the tapped message's Show more so it isn't re-used.
+        try:
+            await query.edit_message_reply_markup(reply_markup=_results_keyboard(False))
+        except Exception:  # noqa: BLE001 - editing is best-effort
+            pass
+        has_more = len(postings) > offset + PAGE_SIZE
+        await send_formatted_reply(
+            query.message,
+            format_postings_page(last_query, postings, offset, PAGE_SIZE),
+            reply_markup=_results_keyboard(has_more),
         )
 
 
