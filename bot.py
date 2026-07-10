@@ -53,19 +53,13 @@ def main() -> None:
     application = build_application()
 
     if settings.webhook_url:
-        # The bot token doubles as a secret URL path so the webhook endpoint
-        # isn't guessable without it.
-        url_path = settings.telegram_bot_token
-        webhook_url = f"{settings.webhook_url.rstrip('/')}/{url_path}"
+        import uvicorn
+
+        from server import build_server
+
         logger.info("Starting AI Nonymauz bot (webhook mode) on port %s", settings.port)
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=settings.port,
-            url_path=url_path,
-            webhook_url=webhook_url,
-            secret_token=settings.webhook_secret_token,
-            allowed_updates=["message"],
-        )
+        app = build_server(application)
+        uvicorn.run(app, host="0.0.0.0", port=settings.port, log_level=settings.log_level.lower())
     else:
         logger.info("Starting AI Nonymauz bot (long polling)")
         application.run_polling(allowed_updates=["message"])

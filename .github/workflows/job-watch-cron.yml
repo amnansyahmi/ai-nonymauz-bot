@@ -1,0 +1,30 @@
+name: Job Watch Cron
+
+# Periodically pings the bot's protected endpoint so it re-checks saved job
+# watches and pushes notifications. The free Render web service sleeps when
+# idle; this request wakes it, so allow for a cold-start with retries.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   BOT_URL     - public base URL of the deployed bot, e.g. https://ai-nonymauz-bot.onrender.com
+#   CRON_SECRET - must match the CRON_SECRET env var set on the bot service
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"  # every 3 hours, at :17 past
+  workflow_dispatch: {}       # allow manual runs from the Actions tab
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger job-watch run
+        run: |
+          curl -sS -X POST "${BOT_URL%/}/tasks/run-job-watches" \
+            -H "X-Cron-Secret: ${CRON_SECRET}" \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --max-time 120 \
+            -w "\nHTTP %{http_code}\n" \
+            --fail-with-body
+        env:
+          BOT_URL: ${{ secrets.BOT_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

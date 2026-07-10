@@ -79,29 +79,56 @@ myjobs - List your saved job watches
 unwatchjob - Remove a saved job watch
 ```
 
-`/jobs <role>` is fully functional today — it asks ai-nonymauz-cloud to search
-for current vacancies and returns the results. `/watchjob` only *saves* a
-search (in SQLite, see `services/storage.py`) for now; there's no scheduler
-yet to periodically re-check it and push a Telegram notification. That's a
-Phase 4 follow-up once a persistence/scheduling story (external DB + either a
-cron-triggered endpoint or a paid always-on worker) is decided.
+`/jobs <role>` searches on demand. `/watchjob <role>` saves a search that the
+bot re-checks on a schedule and messages you about when the results change
+(see "Job-watch notifications" below).
+
+## Job-watch notifications (agentic)
+
+In webhook mode the bot runs its own FastAPI server (`server.py`) that serves
+both the Telegram endpoint and a protected `POST /tasks/run-job-watches`
+endpoint. Hitting that endpoint re-runs every saved watch, and for any whose
+results changed since last time, pushes an update to the user's chat. Results
+are deduplicated by a hash of the search output, so unchanged results don't
+re-notify.
+
+Because the free Render web service sleeps when idle (it can't run its own
+timer), the schedule is driven externally by a **free GitHub Actions cron**
+(`.github/workflows/job-watch-cron.yml`) that POSTs to the endpoint every few
+hours. To enable it, add two repository secrets under
+Settings → Secrets and variables → Actions:
+
+- `BOT_URL` — the bot's public URL, e.g. `https://ai-nonymauz-bot.onrender.com`
+- `CRON_SECRET` — must match the `CRON_SECRET` env var set on the Render service
+
+The endpoint is a no-op returning 503 until `CRON_SECRET` is configured, and
+rejects any request whose `X-Cron-Secret` header doesn't match.
+
+> Notification quality is bounded by ai-nonymauz-cloud's web search, which
+> currently returns mostly job-board landing pages rather than structured
+> postings. The mechanism improves automatically as that search improves.
 
 ## Project structure
 
 ```
 ai-nonymauz-bot/
-├── bot.py              # Entry point; runs polling locally, webhook when deployed
+├── bot.py               # Entry point; polling locally, FastAPI webhook when deployed
+├── server.py            # FastAPI app: Telegram + /tasks/run-job-watches + /health
 ├── config.py            # Environment variable loading
 ├── handlers/
 │   ├── commands.py      # /start /help /about /reset
-│   ├── jobs.py           # /jobs /watchjob /unwatchjob /myjobs
-│   ├── messages.py      # Plain text message handler
+│   ├── jobs.py          # /jobs /watchjob /unwatchjob /myjobs
+│   ├── messages.py      # Plain text message handler (with conversation memory)
 │   └── errors.py        # Global error handler
 ├── services/
-│   ├── cloud_client.py  # HTTP client for ai-nonymauz-cloud
-│   └── storage.py        # SQLite persistence for job watches
+│   ├── cloud_client.py       # HTTP client for ai-nonymauz-cloud
+│   ├── storage.py            # SQLite: conversation history + job watches
+│   ├── jobs_runner.py        # Scheduled watch runner (dedup + notify)
+│   └── job_notifications.py  # Production search/notify wiring for the runner
 ├── utils/
-│   └── formatting.py     # Markdown -> Telegram HTML conversion
+│   └── formatting.py    # Markdown -> Telegram HTML conversion
+├── .github/workflows/
+│   └── job-watch-cron.yml    # Free cron that triggers the watch runner
 ├── requirements.txt
 ├── Dockerfile
 └── render.yaml

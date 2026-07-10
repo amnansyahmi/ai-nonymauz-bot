@@ -27,6 +27,7 @@ class JobWatch:
     chat_id: int
     query: str
     created_at: str
+    last_result_hash: str | None = None
 
 
 async def init_db() -> None:
@@ -38,10 +39,17 @@ async def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id INTEGER NOT NULL,
                 query TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                last_result_hash TEXT
             )
             """
         )
+        # Add the dedup column to pre-existing databases (CREATE IF NOT EXISTS
+        # above won't alter a table that already exists without it).
+        try:
+            await db.execute("ALTER TABLE job_watches ADD COLUMN last_result_hash TEXT")
+        except aiosqlite.OperationalError:
+            pass  # column already exists
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -94,15 +102,36 @@ async def add_job_watch(chat_id: int, query: str) -> JobWatch:
         return JobWatch(id=cursor.lastrowid, chat_id=chat_id, query=query, created_at=created_at)
 
 
+_WATCH_COLUMNS = "id, chat_id, query, created_at, last_result_hash"
+
+
 async def list_job_watches(chat_id: int) -> list[JobWatch]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT id, chat_id, query, created_at FROM job_watches WHERE chat_id = ? ORDER BY id",
+            f"SELECT {_WATCH_COLUMNS} FROM job_watches WHERE chat_id = ? ORDER BY id",
             (chat_id,),
         )
         rows = await cursor.fetchall()
         return [JobWatch(**dict(row)) for row in rows]
+
+
+async def list_all_job_watches() -> list[JobWatch]:
+    """Every watch across all chats — used by the scheduled runner."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(f"SELECT {_WATCH_COLUMNS} FROM job_watches ORDER BY id")
+        rows = await cursor.fetchall()
+        return [JobWatch(**dict(row)) for row in rows]
+
+
+async def set_job_watch_result_hash(watch_id: int, result_hash: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE job_watches SET last_result_hash = ? WHERE id = ?",
+            (result_hash, watch_id),
+        )
+        await db.commit()
 
 
 async def remove_job_watch(chat_id: int, watch_id: int) -> bool:

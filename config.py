@@ -19,6 +19,7 @@ class Settings:
     port: int
     webhook_url: str | None
     webhook_secret_token: str | None
+    cron_secret: str | None
 
 
 def _require(name: str) -> str:
@@ -42,6 +43,7 @@ def load_settings() -> Settings:
         port=int(os.getenv("PORT", "8080")),
         webhook_url=webhook_url,
         webhook_secret_token=os.getenv("WEBHOOK_SECRET_TOKEN"),
+        cron_secret=os.getenv("CRON_SECRET"),
     )
 
 

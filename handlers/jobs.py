@@ -52,9 +52,11 @@ async def watchjob(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     watch = await add_job_watch(chat_id=chat_id, query=query)
     await update.message.reply_text(
         f"✅ Saved watch #{watch.id} for \"{query}\".\n\n"
-        "Note: automatic notifications aren't turned on yet — this only saves "
-        "the watch. Use /jobs to search on demand for now, and /myjobs to see "
-        "your saved watches."
+        "I'll check periodically and message you when the results change. "
+        "Use /myjobs to see your watches, /unwatchjob <id> to stop one, or "
+        "/jobs to search right now.\n\n"
+        "(Automatic checks run only when the deployment's scheduler is "
+        "configured — see the README.)"
     )
 
 
