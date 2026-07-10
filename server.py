@@ -39,7 +39,7 @@ def build_server(application: Application) -> FastAPI:
         await application.bot.set_webhook(
             url=webhook_url,
             secret_token=settings.webhook_secret_token,
-            allowed_updates=["message"],
+            allowed_updates=["message", "callback_query"],
         )
         logger.info("Webhook registered at %s", webhook_url)
         try:

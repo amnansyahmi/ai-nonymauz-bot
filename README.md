@@ -140,6 +140,7 @@ ai-nonymauz-bot/
 ├── config.py            # Environment variable loading
 ├── handlers/
 │   ├── commands.py      # /start /help /about /reset /history /summarize
+│   ├── menu.py          # /menu inline keyboard + button callbacks
 │   ├── bot_commands.py  # The command menu registered on startup
 │   ├── jobs.py          # /jobs /watchjob /unwatchjob /myjobs
 │   ├── media.py         # /image /weather + photo & voice message handlers

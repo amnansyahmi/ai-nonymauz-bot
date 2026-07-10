@@ -58,7 +58,9 @@ ABOUT_MESSAGE = (
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /start", update.effective_user.id if update.effective_user else "unknown")
-    await update.message.reply_text(START_MESSAGE, parse_mode="Markdown")
+    from handlers.menu import main_menu_keyboard  # lazy import avoids a cycle
+
+    await update.message.reply_text(START_MESSAGE, parse_mode="Markdown", reply_markup=main_menu_keyboard())
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -84,13 +86,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("✨ Nothing to reset — we haven't talked yet. Send me anything to begin!")
 
 
-async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    messages = await get_recent_messages(chat_id)
-    if not messages:
-        await update.message.reply_text("No conversation history yet. Send me a message to get started!")
-        return
-
+def render_history(messages: list[dict[str, str]]) -> str:
     lines = []
     for m in messages:
         who = "🧑 You" if m["role"] == "user" else "🤖 AI Nonymauz"
@@ -98,8 +94,17 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if len(text) > 200:
             text = text[:200] + "…"
         lines.append(f"{who}: {text}")
+    return "\n\n".join(lines)
 
-    await send_formatted_reply(update.message, "\n\n".join(lines))
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    messages = await get_recent_messages(chat_id)
+    if not messages:
+        await update.message.reply_text("No conversation history yet. Send me a message to get started!")
+        return
+
+    await send_formatted_reply(update.message, render_history(messages))
 
 
 async def summarize(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

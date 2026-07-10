@@ -10,6 +10,7 @@ from telegram import BotCommand
 
 BOT_COMMANDS = [
     BotCommand("start", "Start the bot"),
+    BotCommand("menu", "Show the quick-action menu"),
     BotCommand("help", "View available commands"),
     BotCommand("about", "About AI Nonymauz"),
     BotCommand("reset", "Reset the conversation"),

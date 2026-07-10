@@ -6,6 +6,7 @@ import logging
 
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     filters,
@@ -18,6 +19,7 @@ from handlers.diag import diag
 from handlers.errors import handle_error
 from handlers.jobs import build_jobs_conversation, myjobs, unwatchjob, watchjob
 from handlers.media import handle_photo, handle_voice, image, weather
+from handlers.menu import menu_callback, menu_command
 from handlers.messages import handle_text
 from services.storage import init_db
 
@@ -59,7 +61,9 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("weather", weather))
     application.add_handler(CommandHandler("history", history))
     application.add_handler(CommandHandler("summarize", summarize))
+    application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("diag", diag))  # not in the public menu
+    application.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu:"))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
@@ -82,7 +86,7 @@ def main() -> None:
         uvicorn.run(app, host="0.0.0.0", port=settings.port, log_level=settings.log_level.lower())
     else:
         logger.info("Starting AI Nonymauz bot (long polling)")
-        application.run_polling(allowed_updates=["message"])
+        application.run_polling(allowed_updates=["message", "callback_query"])
 
 
 if __name__ == "__main__":
