@@ -95,6 +95,14 @@ is optional.
 bot re-checks on a schedule and messages you about when the results change
 (see "Job-watch notifications" below).
 
+**Job data source**: if `JSEARCH_API_KEY` is set, `/jobs` and watches use the
+[JSearch API](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch)
+(Google-for-Jobs data, real Malaysia coverage) and return structured listings
+with title, company, location, and apply link. Without the key, they fall back
+to ai-nonymauz-cloud's web search, which returns mostly job-board landing pages
+rather than individual postings — so setting the key is strongly recommended
+for useful job results.
+
 ## Job-watch notifications (agentic)
 
 In webhook mode the bot runs its own FastAPI server (`server.py`) that serves
@@ -116,9 +124,9 @@ Settings → Secrets and variables → Actions:
 The endpoint is a no-op returning 503 until `CRON_SECRET` is configured, and
 rejects any request whose `X-Cron-Secret` header doesn't match.
 
-> Notification quality is bounded by ai-nonymauz-cloud's web search, which
-> currently returns mostly job-board landing pages rather than structured
-> postings. The mechanism improves automatically as that search improves.
+> Notification quality depends on the job data source: with `JSEARCH_API_KEY`
+> set, watches return real structured postings; without it they fall back to
+> the cloud web search, which returns mostly landing pages.
 
 ## Project structure
 
@@ -135,7 +143,8 @@ ai-nonymauz-bot/
 │   ├── messages.py      # Plain text message handler (with conversation memory)
 │   └── errors.py        # Global error handler
 ├── services/
-│   ├── cloud_client.py       # HTTP client for ai-nonymauz-cloud (chat + image)
+│   ├── cloud_client.py       # HTTP client for ai-nonymauz-cloud (chat/vision/image)
+│   ├── jobs_api.py           # JSearch structured job listings (with fallback)
 │   ├── storage.py            # SQLite: conversation history + job watches
 │   ├── jobs_runner.py        # Scheduled watch runner (dedup + notify)
 │   └── job_notifications.py  # Production search/notify wiring for the runner

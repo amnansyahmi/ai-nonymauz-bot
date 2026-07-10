@@ -20,6 +20,7 @@ class Settings:
     webhook_url: str | None
     webhook_secret_token: str | None
     cron_secret: str | None
+    jsearch_api_key: str | None
 
 
 def _require(name: str) -> str:
@@ -44,6 +45,7 @@ def load_settings() -> Settings:
         webhook_url=webhook_url,
         webhook_secret_token=os.getenv("WEBHOOK_SECRET_TOKEN"),
         cron_secret=os.getenv("CRON_SECRET"),
+        jsearch_api_key=os.getenv("JSEARCH_API_KEY") or os.getenv("RAPIDAPI_KEY"),
     )
 
 

@@ -15,5 +15,7 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: JSEARCH_API_KEY
+        sync: false
       - key: LOG_LEVEL
         value: INFO

@@ -8,6 +8,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
+from services.jobs_api import JobsApiError, format_postings, jsearch
 from services.storage import add_job_watch, list_job_watches, remove_job_watch
 from utils.rate_limit import message_limiter
 from utils.telegram_send import send_formatted_reply, typing_action
@@ -23,6 +24,23 @@ def _job_search_prompt(query: str) -> str:
     )
 
 
+async def job_results_text(chat_id: int, query: str) -> str:
+    """Get job results for a query as a text block.
+
+    Prefers the JSearch API (real structured listings). Falls back to the
+    ai-nonymauz-cloud web search when JSearch isn't configured or errors out.
+    Shared by the /jobs command and the scheduled watch runner.
+    """
+    if jsearch.is_enabled():
+        try:
+            postings = await jsearch.search(query)
+            return format_postings(query, postings)
+        except JobsApiError:
+            logger.warning("JSearch failed for %r; falling back to cloud search", query, exc_info=True)
+
+    return await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
+
+
 async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = " ".join(context.args).strip() if context.args else ""
     if not query:
@@ -36,7 +54,7 @@ async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         async with typing_action(context, chat_id):
-            reply = await ai_nonymauz_cloud.send_message(session_id=chat_id, text=_job_search_prompt(query))
+            reply = await job_results_text(chat_id, query)
     except CloudClientError:
         logger.exception("Job search failed for chat %s", chat_id)
         await update.message.reply_text("⚠️ Sorry, job search isn't available right now. Please try again shortly.")
