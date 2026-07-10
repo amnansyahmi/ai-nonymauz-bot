@@ -85,10 +85,12 @@ async def get_recent_messages(chat_id: int, limit: int = MAX_HISTORY_MESSAGES) -
         return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
 
 
-async def clear_history(chat_id: int) -> None:
+async def clear_history(chat_id: int) -> int:
+    """Delete a chat's stored conversation. Returns how many messages were removed."""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM conversation_messages WHERE chat_id = ?", (chat_id,))
+        cursor = await db.execute("DELETE FROM conversation_messages WHERE chat_id = ?", (chat_id,))
         await db.commit()
+        return cursor.rowcount
 
 
 async def add_job_watch(chat_id: int, query: str) -> JobWatch:

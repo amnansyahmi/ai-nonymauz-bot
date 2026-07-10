@@ -16,35 +16,45 @@ logger = logging.getLogger(__name__)
 
 START_MESSAGE = (
     "👋 Hi, I'm *AI Nonymauz* — your AI assistant on Telegram.\n\n"
-    "Send me a message and I'll get back to you.\n"
-    "Type /help to see what I can do."
+    "Here's what I can do:\n"
+    "💬 Chat — just send a message (I remember our conversation)\n"
+    "🖼 Describe photos — send me a picture\n"
+    "🎨 /image — generate images from text\n"
+    "🌦 /weather — live weather\n"
+    "💼 /jobs — guided job search with real listings\n\n"
+    "Type /help for the full command list."
 )
 
 HELP_MESSAGE = (
-    "*Available commands*\n\n"
-    "/start - Start the bot\n"
-    "/help - View available commands\n"
-    "/about - About AI Nonymauz\n"
-    "/reset - Reset the conversation\n"
-    "/jobs - Guided job search (title, location, salary)\n"
-    "/watchjob <role> - Save a job search to check later\n"
-    "/myjobs - List your saved job watches\n"
-    "/unwatchjob <id> - Remove a saved job watch\n"
-    "/image <description> - Generate an image\n"
-    "/weather <city> - Get the current weather\n"
+    "*What I can do*\n\n"
+    "💬 *Chat* — send any message; I keep track of our conversation.\n"
+    "🖼 *Photos* — send a picture (with an optional question) and I'll describe it.\n\n"
+    "*Commands*\n\n"
+    "🤖 _AI & chat_\n"
+    "/summarize - Summarize our conversation\n"
     "/history - Show recent conversation history\n"
-    "/summarize - Summarize the conversation\n\n"
-    "You can also send me a normal text message, or a photo to describe."
+    "/reset - Forget our conversation and start fresh\n\n"
+    "🎨 _Create & look up_\n"
+    "/image <description> - Generate an image\n"
+    "/weather <city> - Get the current weather\n\n"
+    "💼 _Jobs_\n"
+    "/jobs - Guided job search (title, location, salary)\n"
+    "/watchjob <role> - Save a search; I'll alert you on new results\n"
+    "/myjobs - List your saved job watches\n"
+    "/unwatchjob <id> - Remove a saved job watch\n\n"
+    "ℹ️ _Other_\n"
+    "/about - About AI Nonymauz\n"
+    "/help - Show this message"
 )
 
 ABOUT_MESSAGE = (
-    "*AI Nonymauz*\n\n"
-    "A Telegram frontend for the ai-nonymauz-cloud API. "
-    "This bot forwards your messages to ai-nonymauz-cloud and returns the AI's response."
+    "*AI Nonymauz* 🤖\n\n"
+    "Your AI assistant on Telegram — chat, image generation, vision, live "
+    "weather, and real job listings, all in one place.\n\n"
+    "Powered by the ai-nonymauz-cloud AI backend. The bot itself just connects "
+    "you to it, so new capabilities can be added without changing how you chat.\n\n"
+    "Type /help to see everything I can do."
 )
-
-RESET_MESSAGE = "🔄 Conversation reset. Let's start fresh!"
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /start", update.effective_user.id if update.effective_user else "unknown")
@@ -64,8 +74,14 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("User %s issued /reset", update.effective_user.id if update.effective_user else "unknown")
     context.user_data.clear()
-    await clear_history(update.effective_chat.id)
-    await update.message.reply_text(RESET_MESSAGE)
+    cleared = await clear_history(update.effective_chat.id)
+    if cleared:
+        await update.message.reply_text(
+            f"🔄 Done — I've cleared our conversation ({cleared} message"
+            f"{'s' if cleared != 1 else ''}) and forgotten the earlier context. Starting fresh!"
+        )
+    else:
+        await update.message.reply_text("✨ Nothing to reset — we haven't talked yet. Send me anything to begin!")
 
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
