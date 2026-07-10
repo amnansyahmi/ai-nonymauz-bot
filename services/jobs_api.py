@@ -39,8 +39,9 @@ class JobPosting:
 
 
 class JSearchClient:
-    def __init__(self, api_key: str | None, timeout: float = 30.0) -> None:
+    def __init__(self, api_key: str | None, country: str = "my", timeout: float = 30.0) -> None:
         self._api_key = api_key
+        self._country = country
         self._timeout = timeout
 
     def is_enabled(self) -> bool:
@@ -54,13 +55,20 @@ class JSearchClient:
             "X-RapidAPI-Key": self._api_key,
             "X-RapidAPI-Host": _HOST,
         }
-        params = {"query": query, "page": "1", "num_pages": "1"}
+        # country defaults the search region — without it JSearch assumes "us",
+        # so Malaysian-location queries return nothing.
+        params = {"query": query, "page": "1", "num_pages": "1", "country": self._country}
 
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.get(_URL, headers=headers, params=params)
                 response.raise_for_status()
                 data = response.json()
+        except httpx.HTTPStatusError as exc:
+            # Include the response body so 403 "not subscribed" / 401 "invalid
+            # key" style errors are actionable instead of just a status code.
+            body = (exc.response.text or "").strip()[:200]
+            raise JobsApiError(f"Jobs API returned HTTP {exc.response.status_code}: {body}") from exc
         except httpx.HTTPError as exc:
             raise JobsApiError(f"Failed to reach jobs API: {exc}") from exc
 
@@ -98,4 +106,4 @@ def format_postings(query: str, postings: list[JobPosting]) -> str:
     return "\n\n".join(lines)
 
 
-jsearch = JSearchClient(api_key=settings.jsearch_api_key)
+jsearch = JSearchClient(api_key=settings.jsearch_api_key, country=settings.jsearch_country)
