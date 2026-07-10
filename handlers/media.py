@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import time
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatAction
@@ -18,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 _IMAGE_ACTIONS = InlineKeyboardMarkup([[InlineKeyboardButton("🎨 Another", callback_data="act:image_again")]])
 _WEATHER_ACTIONS = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="act:weather_refresh")]])
+
+# Short-lived weather cache: {location_key: (timestamp, reply)}. Weather doesn't
+# change minute to minute, so repeat lookups skip the backend call.
+_WEATHER_CACHE: dict[str, tuple[float, str]] = {}
+_WEATHER_TTL = 600  # seconds
 
 
 async def _generate_image(message: Message, context: ContextTypes.DEFAULT_TYPE, prompt: str) -> None:
@@ -36,8 +42,19 @@ async def _generate_image(message: Message, context: ContextTypes.DEFAULT_TYPE, 
     await message.reply_photo(photo=io.BytesIO(image_bytes), caption=prompt, reply_markup=_IMAGE_ACTIONS)
 
 
-async def _fetch_weather(message: Message, context: ContextTypes.DEFAULT_TYPE, location: str) -> None:
+async def _fetch_weather(
+    message: Message, context: ContextTypes.DEFAULT_TYPE, location: str, *, force: bool = False
+) -> None:
     chat_id = message.chat_id
+    cache_key = location.strip().lower()
+
+    if not force:
+        cached = _WEATHER_CACHE.get(cache_key)
+        if cached and time.monotonic() - cached[0] < _WEATHER_TTL:
+            context.user_data["last_weather_location"] = location
+            await send_formatted_reply(message, cached[1], reply_markup=_WEATHER_ACTIONS)
+            return
+
     if not message_limiter.allow(chat_id):
         await message.reply_text("⏳ Please wait a few seconds and try again.")
         return
@@ -52,6 +69,7 @@ async def _fetch_weather(message: Message, context: ContextTypes.DEFAULT_TYPE, l
         logger.exception("Weather lookup failed for chat %s", chat_id)
         await message.reply_text("⚠️ Sorry, I couldn't get the weather right now. Please try again shortly.")
         return
+    _WEATHER_CACHE[cache_key] = (time.monotonic(), reply)
     context.user_data["last_weather_location"] = location
     await send_formatted_reply(message, reply, reply_markup=_WEATHER_ACTIONS)
 
@@ -82,7 +100,7 @@ async def media_action_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await query.message.reply_text("That prompt has expired — use /image again.")
     elif action == "weather_refresh":
         location = context.user_data.get("last_weather_location", "")
-        await _fetch_weather(query.message, context, location)
+        await _fetch_weather(query.message, context, location, force=True)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

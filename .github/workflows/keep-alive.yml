@@ -1,0 +1,27 @@
+name: Keep Alive
+
+# Pings the bot's /health endpoint to keep the free Render web service warm,
+# avoiding the ~30-60s cold-start delay on the first message after idle.
+#
+# Trade-off: keeping the service always awake consumes Render free-instance
+# hours. If you'd rather conserve those, increase the interval or disable this
+# workflow — the bot still works, the first message after idle just cold-starts.
+#
+# Requires repository secret BOT_URL (same as the job-watch workflow).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # every 10 min (Render free spins down after ~15 min idle)
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -sS "${BOT_URL%/}/health" \
+            --retry 3 --retry-all-errors --retry-delay 5 --max-time 60 \
+            -w "\nHTTP %{http_code}\n" || true
+        env:
+          BOT_URL: ${{ secrets.BOT_URL }}

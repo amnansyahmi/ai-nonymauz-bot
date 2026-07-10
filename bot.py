@@ -53,8 +53,22 @@ async def on_startup(application: Application) -> None:
     )
 
 
+async def on_shutdown(application: Application) -> None:
+    """Close the shared HTTP client. Runs for polling (post_shutdown) and
+    webhook (server lifespan)."""
+    from services.cloud_client import ai_nonymauz_cloud
+
+    await ai_nonymauz_cloud.aclose()
+
+
 def build_application() -> Application:
-    application = Application.builder().token(settings.telegram_bot_token).post_init(on_startup).build()
+    application = (
+        Application.builder()
+        .token(settings.telegram_bot_token)
+        .post_init(on_startup)
+        .post_shutdown(on_shutdown)
+        .build()
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))

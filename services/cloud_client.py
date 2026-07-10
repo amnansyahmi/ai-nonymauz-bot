@@ -63,6 +63,19 @@ class CloudClient:
         self._base_url = base_url.rstrip("/") if base_url else None
         self._api_key = api_key
         self._timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        # One shared client reuses pooled keep-alive connections across
+        # requests, avoiding a fresh TCP+TLS handshake every time. Created
+        # lazily so it binds to the running event loop.
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
 
     def _headers(self) -> dict[str, str]:
         headers = {}
@@ -72,14 +85,13 @@ class CloudClient:
 
     async def _post_chat(self, payload: dict) -> str:
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/chat",
-                    json=payload,
-                    headers=self._headers(),
-                )
-                response.raise_for_status()
-                data = response.json()
+            response = await self._get_client().post(
+                f"{self._base_url}/chat",
+                json=payload,
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            data = response.json()
         except httpx.HTTPError as exc:
             raise CloudClientError(f"Failed to reach ai-nonymauz-cloud: {exc}") from exc
 
@@ -143,14 +155,13 @@ class CloudClient:
             raise CloudClientError("AI_NONYMAUZ_CLOUD_URL is not configured")
 
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/image/generate",
-                    json={"prompt": prompt},
-                    headers=self._headers(),
-                )
-                response.raise_for_status()
-                data = response.json()
+            response = await self._get_client().post(
+                f"{self._base_url}/image/generate",
+                json={"prompt": prompt},
+                headers=self._headers(),
+            )
+            response.raise_for_status()
+            data = response.json()
         except httpx.HTTPStatusError as exc:
             # The API returns 429 when the daily image limit is hit, 402 when the
             # image provider needs credits — surface those as a friendly message.
