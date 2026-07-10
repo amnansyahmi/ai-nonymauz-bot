@@ -53,6 +53,11 @@ class CloudClient:
         payload = {
             "messages": [{"role": "user", "content": text}],
             "stream": False,
+            # "auto" mode routes unpredictably and often truncates
+            # (finish_reason: length) before finishing tool/search-based
+            # answers. "deep" mode + a higher token budget avoids that.
+            "mode": "deep",
+            "max_tokens": 2048,
         }
 
         try:

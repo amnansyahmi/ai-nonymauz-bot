@@ -9,6 +9,7 @@ from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
+from utils.formatting import markdown_to_telegram_html
 
 logger = logging.getLogger(__name__)
 
@@ -30,4 +31,4 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.exception("ai-nonymauz-cloud request failed for user %s", user_id)
         reply = "⚠️ Sorry, I couldn't reach the AI service right now. Please try again shortly."
 
-    await message.reply_text(reply)
+    await message.reply_text(markdown_to_telegram_html(reply), parse_mode="HTML")
