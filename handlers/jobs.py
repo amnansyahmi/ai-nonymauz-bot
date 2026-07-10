@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
 from services.storage import add_job_watch, list_job_watches, remove_job_watch
+from utils.rate_limit import message_limiter
 from utils.telegram_send import send_formatted_reply, typing_action
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,9 @@ async def jobs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     chat_id = update.effective_chat.id
+    if not message_limiter.allow(chat_id):
+        await update.message.reply_text("⏳ You're searching a bit fast. Please wait a few seconds and try again.")
+        return
 
     try:
         async with typing_action(context, chat_id):

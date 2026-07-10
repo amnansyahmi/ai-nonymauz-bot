@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from services.cloud_client import CloudClientError, ai_nonymauz_cloud
 from services.storage import add_message, get_recent_messages
+from utils.rate_limit import message_limiter
 from utils.telegram_send import send_formatted_reply, typing_action
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id if update.effective_user else "unknown"
     logger.info("Received message from user %s: %s", user_id, message.text)
+
+    if not message_limiter.allow(chat_id):
+        await message.reply_text("⏳ You're sending messages a bit fast. Please wait a few seconds and try again.")
+        return
 
     history = await get_recent_messages(chat_id)
     conversation = history + [{"role": "user", "content": message.text}]
